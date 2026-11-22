@@ -1,8 +1,9 @@
-# EarthLab
+# flŭd
 
-EarthLab opens on a guided introduction to Houston. Choose an area to explore
+flŭd opens on a guided introduction to Houston. Choose an area to explore
 modeled flood depths on roads and 3D buildings, play a storm, or trace a
-hypothetical route to a hospital. All five areas use the AquaGrid simulator.
+hypothetical route to a hospital. All five areas run on flŭd's built-in flood
+simulator.
 
 ## Run locally
 
@@ -30,43 +31,43 @@ Install Python dependencies using the matching platform command:
 .venv/bin/python -m pip install -r requirements.lock
 ```
 
-To serve AquaGrid locally, complete the [simulator setup](simulator/README.md)
+To run the simulator locally, complete the [simulator setup](simulator/README.md)
 to install its frontend and Python dependencies. Prepare the regional data with
 `python -m aquagrid.prepare_zones` from `simulator/backend` using the simulator
-Python environment. Alternatively, point to a hosted AquaGrid map using
-`VITE_SIMULATOR_URL`. Start the product from the repository root:
+Python environment. Alternatively, point to a hosted simulator map using
+`VITE_SIMULATOR_URL`. Start flŭd from the repository root:
 
 ```sh
 pnpm dev
 ```
 
-Open [EarthLab](http://127.0.0.1:5173/), follow **Explore Houston**, and select
-**Open EarthLab** to choose an area. You can also go directly to the
-[five-area chooser](http://127.0.0.1:5173/#/simulate).
+Open [flŭd](http://127.0.0.1:5173/), follow **Explore Houston**, and use the
+button at the end of the introduction to choose an area. You can also go
+directly to the [five-area chooser](http://127.0.0.1:5173/#/simulate).
 `pnpm dev` and `pnpm dev:integrated` run the same local stack.
 
 | Local service | Address |
 | --- | --- |
-| EarthLab product site | http://127.0.0.1:5173 |
-| EarthLab planning API | http://127.0.0.1:8000/docs |
-| AquaGrid 3D map | http://127.0.0.1:5174 |
-| AquaGrid region catalog | http://127.0.0.1:8001/api/regions |
+| flŭd site | http://127.0.0.1:5173 |
+| flŭd planning API | http://127.0.0.1:8000/docs |
+| Simulator 3D map | http://127.0.0.1:5174 |
+| Simulator region catalog | http://127.0.0.1:8001/api/regions |
 
-For a hosted AquaGrid map, set `VITE_SIMULATOR_URL` to its frontend URL before
-starting EarthLab. The launcher then starts only the product site and EarthLab
-API. To use the local map with an existing AquaGrid backend, set `AQUAGRID_API`
-to its origin. The launcher reads these settings from the shell or a root
+For a hosted simulator map, set `VITE_SIMULATOR_URL` to its frontend URL before
+starting flŭd. The launcher then starts only the site and planning API. To use
+the local map with an existing simulator backend, set `AQUAGRID_API` to its
+origin. The launcher reads these settings from the shell or a root
 `.env.local` file. With no overrides it starts all four services. Local simulation
 requires no provider credentials. Keep server secrets out of `VITE_*` variables.
 
 ## Try a simulation
 
-1. Choose a Houston area. Its street and building map opens inside EarthLab.
+1. Choose a Houston area. Its street and building map opens inside flŭd.
 2. Open **Storm controls**, select a storm, and play the modeled changes.
 3. Choose a hospital in **Impact and routing** and place a pin on the map to
    calculate a hypothetical route. Use the area selector to open another region.
 
-The separate resource-allocation engine is available through the EarthLab API
+The separate resource-allocation engine is available through the flŭd planning API
 and `pnpm demo:allocation` for the mitigation and response examples. It uses
 an illustrative graph. The [planning handoff](docs/handoffs/houston-resource-planning.md)
 documents its assumptions and utility functions.

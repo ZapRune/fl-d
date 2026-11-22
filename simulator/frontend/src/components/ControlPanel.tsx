@@ -84,7 +84,7 @@ export default function ControlPanel({ meta, weatherLabel, controls, preset, onC
             <i aria-hidden="true" />
           </button>
           <div className="storm-table">
-            <div className="storm-columns"><span>Storm presets</span><span>Rainfall</span></div>
+            <div className="storm-columns"><span>Scenario presets</span><span>Rainfall</span></div>
             {scenarios.map(([key, p]) => {
               const Icon = PRESET_ICON[key] ?? CloudRain
               return <button type="button" key={key} title={p.blurb} aria-label={p.label}
@@ -94,6 +94,10 @@ export default function ControlPanel({ meta, weatherLabel, controls, preset, onC
               </button>
             })}
           </div>
+          <p className="storm-preset-note">
+            Presets are illustrative parameter sets. Names that echo past Houston storms describe their scale, not a
+            reconstruction of those events.
+          </p>
         </section>
 
         <section>
@@ -176,11 +180,12 @@ export default function ControlPanel({ meta, weatherLabel, controls, preset, onC
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2.5 text-[13px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(37,99,235,0.8)] transition hover:brightness-110 disabled:opacity-40"
             >
               <Play className="h-4 w-4 fill-current" />
-              Play the storm hour by hour
+              Animate scenario buildup
             </button>
           )}
           <p className="mt-2 text-[10.5px] leading-relaxed text-slate-500">
-            Re-predicts {meta.counts.edges.toLocaleString()} roads and {meta.counts.buildings.toLocaleString()} buildings on every change.
+            Steps the scenario inputs up in stages and re-predicts {meta.counts.edges.toLocaleString()} roads and{' '}
+            {meta.counts.buildings.toLocaleString()} buildings at each step. It is not a time-resolved flood simulation.
           </p>
         </section>
       </div>

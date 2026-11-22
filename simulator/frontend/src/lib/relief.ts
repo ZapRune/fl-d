@@ -1,5 +1,5 @@
 /**
- * "Relief money": where a donation would reach the most people in need under the storm on screen.
+ * "Equity & Relief Priorities": where modeled flooding and social vulnerability overlap under the storm on screen.
  *
  * Census tracts (public/relief/<region>.json, built by ml/relief/build_relief.py) carry residents
  * and CDC/ATSDR Social Vulnerability Index measures. Each modeled result gives every building a
@@ -158,7 +158,7 @@ export function reasons(t: ReliefTract, n: Needs): string[] {
   if (n.flooded >= 1 && n.deep / n.flooded >= 0.1) out.push([n.deep / n.flooded, 'homes in deep water'])
   if ((t.noVehicle ?? 0) >= 15) out.push([(t.noVehicle ?? 0) / 100, 'many households have no car'])
   if ((t.poverty ?? 0) >= 35) out.push([(t.poverty ?? 0) / 100, 'low incomes'])
-  if (n.cutOff >= 25) out.push([0.3, 'older residents cut off from the hospital'])
+  if (n.cutOff >= 25) out.push([0.3, 'older residents without modeled hospital access'])
   if ((t.uninsured ?? 0) >= 30) out.push([(t.uninsured ?? 0) / 100, 'many without health insurance'])
   return out.sort((a, b) => b[0] - a[0]).slice(0, 2).map(([, text]) => text)
 }

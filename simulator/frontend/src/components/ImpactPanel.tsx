@@ -61,15 +61,15 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
           <div className="grid grid-cols-2 gap-2">
             <Kpi
               icon={Waves}
-              label="Roads flooded"
+              label="Road segments flagged as flooded"
               tone={s && s.roads.flooded_pct > 5 ? 'water' : 'neutral'}
               value={s ? s.roads.flooded_km.toFixed(0) : '–'}
               unit="km"
-              sub={s ? `${s.roads.flooded_pct}% of ${s.roads.total_km.toFixed(0)} km, >15 cm` : ' '}
+              sub={s ? `${s.roads.flooded_pct}% of ${s.roads.total_km.toFixed(0)} km · lowest point >15 cm` : ' '}
             />
             <Kpi
               icon={Ban}
-              label={`Closed to ${vehicle === 'sedan' ? 'cars' : vehicle === 'truck' ? 'trucks' : 'ambulances'}`}
+              label={`Road segments closed to ${vehicle === 'sedan' ? 'cars' : vehicle === 'truck' ? 'trucks' : 'ambulances'}`}
               tone={s && s.roads.impassable_km > 0.5 ? 'danger' : 'neutral'}
               value={s ? s.roads.impassable_km.toFixed(1) : '–'}
               unit="km"
@@ -77,14 +77,14 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
             />
             <Kpi
               icon={Building2}
-              label="Buildings flooded"
+              label="Building footprints with elevated modeled depth"
               tone={s && s.buildings.flooded > 0 ? 'water' : 'neutral'}
               value={s ? s.buildings.flooded.toLocaleString() : '–'}
-              sub={s ? `${s.buildings.severe.toLocaleString()} with >50 cm` : ' '}
+              sub={s ? `>15 cm · ${s.buildings.severe.toLocaleString()} over 50 cm` : ' '}
             />
             <Kpi
               icon={Siren}
-              label="Cut off from ER"
+              label="Buildings without modeled access to selected hospital"
               tone={s && s.access.cut_off > 0 ? 'danger' : 'neutral'}
               value={s ? s.access.cut_off.toLocaleString() : '–'}
               unit="bldgs"
@@ -95,6 +95,10 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
               }
             />
           </div>
+          <p className="mt-2 px-1 text-[10.5px] leading-snug text-slate-500">
+            Each road segment and building footprint is scored by the modeled depth at its lowest point. Flagged segments
+            count at full length, so these figures are not a measured submerged length or area.
+          </p>
           {s && (
             <div className="mt-2 flex items-center justify-between rounded-lg bg-white/[0.025] px-3 py-1.5 font-mono text-[11px] text-slate-400">
               <span>
@@ -110,10 +114,10 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
         {result?.spatial && <details className="storm-event" open>
           <summary>Most exposed areas</summary>
           <div>
-            <p>Road length over 15 cm of water, grouped by the nearest named place. Building counts use the same depth threshold.</p>
+            <p>Length of road segments flagged as flooded (lowest point over 15 cm), grouped by the nearest named place. Building footprints use the same depth threshold.</p>
             {result.spatial.areas.some(a => a.flooded_road_km > 0 || a.affected_buildings > 0) ?
               <table className="storm-areas">
-                <thead><tr><th>Near</th><th>Flooded km</th><th>Buildings</th></tr></thead>
+                <thead><tr><th>Near</th><th>Flagged km</th><th>Buildings</th></tr></thead>
                 <tbody>{result.spatial.areas.filter(a => a.flooded_road_km > 0 || a.affected_buildings > 0).map(a =>
                   <tr key={a.name}><th scope="row">{a.name}</th><td>{a.flooded_road_km.toFixed(1)}</td><td>{a.affected_buildings.toLocaleString()}</td></tr>
                 )}</tbody>
@@ -165,7 +169,7 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
         {s && s.hotspots.length > 0 && (
           <section>
             <SectionTitle icon={TriangleAlert}>Streets with the most flooding</SectionTitle>
-            <p className="mb-2 text-[11px] text-slate-400">Flooded length and maximum modeled water depth. The model estimates exposure and passability. Structural failure and event likelihood are outside its scope.</p>
+            <p className="mb-2 text-[11px] text-slate-400">Length of flagged segments and maximum modeled water depth. The model estimates exposure and passability. Structural failure and event likelihood are outside its scope.</p>
             <ul className="space-y-1.5">
               {s.hotspots.map((h) => {
                 const maxKm = s.hotspots[0].flooded_km || 1
@@ -256,8 +260,8 @@ function ModelCard({ meta, result }: { meta: Meta; result: SimResult | null }) {
     <section className="rounded-xl border border-white/[0.06] bg-white/[0.02]">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center justify-between px-3 py-2.5 text-left">
         <span className="flex items-center gap-2 text-[12px] font-semibold text-slate-200">
-          <Brain className="h-4 w-4 text-violet-300" />
-          Inference engine
+          <Brain className="h-4 w-4 shrink-0 text-violet-300" />
+          flŭd AI · XGBoost flood-depth surrogate
         </span>
         <span className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
           {result && <span className="text-emerald-300">{Math.round(result.timing_ms.total)} ms</span>}
@@ -277,6 +281,11 @@ function ModelCard({ meta, result }: { meta: Meta; result: SimResult | null }) {
           </div>
         ))}
       </div>
+      <p className="border-t border-white/[0.05] px-3 py-2 text-[11px] leading-snug text-slate-400">
+        Trained to approximate a physics-inspired flood model across {m.n_train_storms.toLocaleString()} synthetic storm
+        scenarios, so scenarios can be explored interactively. These scores measure agreement with that underlying
+        simulator on held-out storms. They are not independently validated flood-prediction accuracy.
+      </p>
       {open && (
         <div className="space-y-3 border-t border-white/[0.05] px-3 py-3 text-[11.5px] leading-relaxed text-slate-400">
           <p>

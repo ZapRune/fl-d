@@ -11,14 +11,19 @@ HOUSTON_PRESETS = {
                   blurb="Dry day; normal bayou water levels."),
     "shower": dict(label="Afternoon Downpour", rain=25, duration=1.2, surge=0.0, clog=0.15,
                    blurb="1 in/hr typical Gulf downpour. Streets pond briefly, drains keep up."),
-    "memorial": dict(label="Memorial Day (2015)", rain=65, duration=3, surge=0.0, clog=0.35,
-                     blurb="~8 in cloudburst over Brays Bayou; rapid flash ponding on feeder roads."),
-    "taxday": dict(label="Tax Day (2016)", rain=75, duration=4, surge=0.0, clog=0.45,
-                   blurb="12-16 in storm; Buffalo and Brays bayous overtop banks."),
-    "100yr": dict(label="100-Yr NOAA Atlas", rain=85, duration=3, surge=0.1, clog=0.5,
-                  blurb="NOAA Atlas 14 100-year recurrence: severe road network severance."),
-    "harvey": dict(label="Harvey Deluge (2017)", rain=125, duration=8, surge=0.3, clog=0.75,
-                   blurb="Catastrophic 500-year stall: 40+ in total; medical & highway corridors submerged."),
+    # Historical names are inspiration only: these are fixed parameter sets, not event reconstructions.
+    "memorial": dict(label="Severe rainfall scenario", rain=65, duration=3, surge=0.0, clog=0.35,
+                     blurb="~8 in cloudburst, inspired by the 2015 Memorial Day flood. "
+                           "Illustrative parameters, not a reconstruction of that event."),
+    "taxday": dict(label="Extreme rainfall scenario", rain=75, duration=4, surge=0.0, clog=0.45,
+                   blurb="~12 in storm, inspired by the 2016 Tax Day flood. "
+                         "Illustrative parameters, not a reconstruction of that event."),
+    "100yr": dict(label="High-return-period stress test (illustrative)", rain=85, duration=3, surge=0.1, clog=0.5,
+                  blurb="Intensity in the range of a rare, roughly 100-year rainfall. "
+                        "A stress test, not a calibrated NOAA Atlas 14 design storm."),
+    "harvey": dict(label="Harvey-scale rainfall scenario (illustrative)", rain=125, duration=8, surge=0.3, clog=0.75,
+                   blurb="Prolonged extreme rain at a scale inspired by Hurricane Harvey (2017). "
+                         "Illustrative parameters, not a reconstruction of that event."),
 }
 
 VEHICLES = {

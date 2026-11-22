@@ -16,7 +16,7 @@ export function Sources() {
             Roads <span>Curated example</span>
           </dt>
           <dd>
-            EarthLab's independently drawn sample represents a small set of Houston corridors.
+            flŭd's independently drawn sample represents a small set of Houston corridors.
             Positions and connections are approximate. Actual road conditions are unknown.
           </dd>
         </div>

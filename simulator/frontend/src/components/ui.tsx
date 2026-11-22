@@ -164,8 +164,8 @@ export function Kpi({
   }[tone]
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] px-2.5 py-2">
-      <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-        <Icon className={`h-3.5 w-3.5 ${toneCls}`} />
+      <div className="flex items-start gap-1.5 text-[11px] font-medium leading-snug text-slate-400">
+        <Icon className={`mt-px h-3.5 w-3.5 shrink-0 ${toneCls}`} />
         {label}
       </div>
       <div className="mt-1 flex items-baseline gap-1">

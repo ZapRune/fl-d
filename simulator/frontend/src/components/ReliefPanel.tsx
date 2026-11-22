@@ -26,7 +26,7 @@ type Props = {
   onCollapse: () => void
 }
 
-/** Where a donation would reach the most people in need during the storm on screen. */
+/** Equity & Relief Priorities: where modeled flooding and social vulnerability overlap for the storm on screen. */
 export default function ReliefPanel({ data, places, budget, onBudget, focus, onFocus, highlighted, onHighlight, onLocate, onCollapse }: Props) {
   const custom = !BUDGETS.includes(budget)
   const [amount, setAmount] = useState(custom ? budget.toLocaleString('en-US') : '')
@@ -44,13 +44,16 @@ export default function ReliefPanel({ data, places, budget, onBudget, focus, onF
   return (
     <aside className="sim-panel relief-panel">
       <header className="sim-layer-header">
-        <h2 id="relief-panel-title">Relief money</h2>
-        <button type="button" onClick={onCollapse} aria-label="Close relief money"><X size={18} /></button>
+        <h2 id="relief-panel-title">Equity &amp; Relief Priorities</h2>
+        <button type="button" onClick={onCollapse} aria-label="Close Equity and Relief Priorities"><X size={18} /></button>
       </header>
       <div className="relief-body">
-        <p className="relief-lede">Where a donation would help the most people in need during this storm.</p>
+        <p className="relief-lede">
+          Two neighborhoods can experience similar flooding but face very different barriers to recovery. This ranks the census
+          tracts where modeled flooding and social vulnerability overlap and splits a relief budget across them.
+        </p>
 
-        <div className="relief-choice" role="group" aria-label="Budget">
+        <div className="relief-choice" role="group" aria-label="Relief budget">
           {BUDGETS.map((b) => (
             <button key={b} type="button" aria-pressed={b === budget} onClick={() => { setAmount(''); setInvalid(false); onBudget(b) }}>{money(b)}</button>
           ))}
@@ -81,10 +84,15 @@ export default function ReliefPanel({ data, places, budget, onBudget, focus, onF
         {!data ? (
           <p className="relief-empty">Neighbourhood data isn’t available for this area.</p>
         ) : places === null ? (
-          <p className="relief-empty">Run a storm to see where money would help.</p>
+          <p className="relief-empty">Run a storm to see which places to prioritize.</p>
         ) : places.length === 0 ? (
-          <p className="relief-empty">This storm doesn’t flood homes here, so there’s nowhere to send money yet.</p>
+          <p className="relief-empty">This storm doesn’t flood homes here, so no place is prioritized yet.</p>
         ) : (
+          <>
+          <p className="relief-assumption">
+            <strong>Estimated residents exposed</strong> is a tract-level proxy: each census tract’s population is spread evenly
+            across its mapped buildings. It is not a household count.
+          </p>
           <ol className="relief-places" aria-label={`Top places for ${money(budget)}`}>
             {places.map((p) => (
               <li key={p.tract.geoid}>
@@ -102,7 +110,7 @@ export default function ReliefPanel({ data, places, budget, onBudget, focus, onF
                       {repeated.has(placeName(p.tract)) && <em> · {p.tract.label.replace('Tract', 'tract')}</em>}
                     </strong>
                     <small>
-                      {count(p.needs.flooded)} people flooded{p.reasons.length ? ` · ${p.reasons.join(', ')}` : ''}
+                      ≈{count(p.needs.flooded)} est. residents exposed{p.reasons.length ? ` · ${p.reasons.join(', ')}` : ''}
                     </small>
                   </span>
                   <span className="relief-dollars">{money(p.dollars)}</span>
@@ -110,18 +118,19 @@ export default function ReliefPanel({ data, places, budget, onBudget, focus, onF
               </li>
             ))}
           </ol>
+          </>
         )}
 
         <p className="relief-note">
-          Uses this storm’s modeled flooding and 2022 census data. A starting point to check with local groups, not a needs
-          assessment.
+          Uses this storm’s modeled flooding, 2022 census data and the CDC Social Vulnerability Index. An exploratory starting
+          point to check with local groups, not a needs assessment.
         </p>
         {data && (
           <details className="relief-how">
             <summary>How it’s worked out</summary>
             <p>
-              Each place counts its residents in flooded homes, plus extra weight for people in deep water, without a car, or
-              older or disabled and cut off from the hospital. “Most in need” gives more weight to places that rank high on the
+              Each tract counts its estimated residents in flooded buildings (more than 15 cm of modeled water), plus extra
+              weight for people in deep water, without a car, or older or disabled and without modeled hospital access. “Most in need” gives more weight to places that rank high on the
               CDC Social Vulnerability Index. The budget is split in proportion across the top five places.
             </p>
             <ul>

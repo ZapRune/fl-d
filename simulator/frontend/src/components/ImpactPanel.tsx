@@ -39,7 +39,8 @@ const fmtKm = (m: number) => `${(m / 1000).toFixed(1)} km`
 
 export default function ImpactPanel({ meta, result, request, vehicle, onVehicle, hospital, onHospital, dest, onDest, onCollapse }: Props) {
   const s = result?.stats
-  const r = result?.route
+  const hasStart = Boolean(dest.id || dest.lonlat)
+  const r = hasStart ? result?.route : undefined
   const vehLabel = meta.vehicles[vehicle]?.label.toLowerCase() ?? vehicle
   return (
     <Panel>
@@ -130,7 +131,12 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
           <SectionTitle icon={Route}>Modeled route</SectionTitle>
           <div className="space-y-2">
             <p className="px-1 text-[12px] font-semibold text-cyan-200">From · Starting point</p>
-            <Select icon={MapPin} label="Starting point" value={dest.id ?? 'custom'} onChange={onDest}>
+            <Select icon={MapPin} label="Starting point" value={dest.id ?? (dest.lonlat ? 'custom' : '')} onChange={onDest}>
+              {!hasStart && (
+                <option value="" disabled className="bg-slate-900">
+                  Choose a starting point
+                </option>
+              )}
               {dest.lonlat && (
                 <option value="custom" className="bg-slate-900">
                   Dropped pin ({dest.lonlat[1].toFixed(4)}, {dest.lonlat[0].toFixed(4)})
@@ -162,7 +168,11 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
                 { value: 'truck', label: 'Rescue', icon: Truck, hint: '75 cm' },
               ]}
             />
-            {r ? <RouteStatus r={r} vehLabel={vehLabel} /> : <p role="status" className="px-1 text-[12px] text-emerald-200">Calculating route and estimated travel time…</p>}
+            {!hasStart ? (
+              <p role="status" className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 text-[12px] leading-snug text-slate-300">
+                No route yet. Drop a pin on the map or choose a starting point to plan a route to the selected hospital.
+              </p>
+            ) : r ? <RouteStatus r={r} vehLabel={vehLabel} /> : <p role="status" className="px-1 text-[12px] text-emerald-200">Calculating route and estimated travel time…</p>}
           </div>
         </section>
 

@@ -196,7 +196,8 @@ export default function App() {
         setPreset('current')
         setControls({ ...BASELINE, rain: local?.rain ?? 0 })
         setHospital(meta.hospitals[0]?.id ?? '')
-        setDest({ id: meta.neighborhoods[0]?.id })
+        // No starting point until the user picks one, so no route is drawn on arrival.
+        setDest({})
         setMeta(meta)
       })
       .catch(failed)
@@ -432,7 +433,7 @@ export default function App() {
       <main className="sim-stage">
         <div id="sim-map" className="sim-map" tabIndex={-1} aria-label="Houston scenario map. Click to choose a starting point, or use the starting point selector in Impact and routing." inert={modal}>
           {scene ? <>
-            <scene.MapView key={meta.region.id} meta={meta} roads={scene.roads} buildings={scene.buildings} result={deferredResult} buildingMode={buildingMode} showWater={showWater} storm={event ? 0 : mapSeverity} onPick={onPick} eventTrack={draft ?? event?.track} pickingTrack={draft !== null}
+            <scene.MapView key={meta.region.id} meta={meta} roads={scene.roads} buildings={scene.buildings} result={deferredResult} buildingMode={buildingMode} showWater={showWater} storm={event ? 0 : mapSeverity} onPick={onPick} eventTrack={draft ?? event?.track} pickingTrack={draft !== null} showRoute={Boolean(dest.id || dest.lonlat)}
               relief={panel === 'relief' && reliefPlaces ? { places: reliefPlaces, highlighted: reliefHighlight, locate: reliefLocate } : null} />
             {!event && <RainOverlay rain={controls.rain} wind={wind} severity={severity} />}
           </> : <p className="sim-map-loading" role="status"><LoaderCircle size={16} aria-hidden="true" className="sim-spinner" />Loading roads and buildings…</p>}

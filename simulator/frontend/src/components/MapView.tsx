@@ -95,6 +95,8 @@ type Props = {
   pickingTrack?: boolean
   /** Ranked places from the Equity & Relief Priorities panel, drawn while it is open. */
   relief?: { places: Place[]; highlighted: string | null; locate: { geoid: string; n: number } | null } | null
+  /** False until the user picks a starting point: the route, start pin and moving dot stay hidden. */
+  showRoute?: boolean
 }
 
 function useDecodedImage(url?: string) {
@@ -114,7 +116,7 @@ function useDecodedImage(url?: string) {
   return decoded && decoded.url === url ? decoded.image : null
 }
 
-function MapView({ meta, roads, buildings, result, buildingMode, showWater, storm, onPick, eventTrack = NO_TRACK, pickingTrack = false, relief = null }: Props) {
+function MapView({ meta, roads, buildings, result, buildingMode, showWater, storm, onPick, eventTrack = NO_TRACK, pickingTrack = false, relief = null, showRoute = true }: Props) {
   const deckRef = useRef<DeckGLRef>(null)
   const surface = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Set<number>())
@@ -301,8 +303,9 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
     return { water, roadLayer, bldLayer }
   }, [overlay, showWater, meta, roads, buildings, roadIdx, edgeDepth, closures, bldDepth, access, clearance, buildingMode, resultKey])
 
-  const route = result?.route
+  const route = showRoute ? result?.route : undefined
   const cur = route?.current
+  const selectedHospital = result?.route.hospital.id
   const hasTrack = eventTrack.length > 0
   const activeTrack = pickingTrack ? NO_TRACK : result?.spatial?.active_track ?? NO_TRACK
   const flowPaths = showWater && !pickingTrack ? result?.spatial?.flow_paths ?? NO_FLOW : NO_FLOW
@@ -436,11 +439,11 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
   }, [relief])
 
   const markerLayers = useMemo(() => {
-    const hospitals = meta.hospitals.map((h) => ({ ...h, active: h.id === route?.hospital.id }))
+    const hospitals = meta.hospitals.map((h) => ({ ...h, active: h.id === selectedHospital }))
     const dest = route?.dest
     const labels = [
       ...meta.neighborhoods.filter((n) => n.id !== dest?.id).map((n) => ({ text: n.name, pos: [n.lon, n.lat], kind: 'hood' })),
-      ...hospitals.filter((h) => h.active).map((h) => ({ text: `Destination · ${h.name}`, pos: [h.lon, h.lat], kind: 'hosp' })),
+      ...hospitals.filter((h) => h.active).map((h) => ({ text: `${dest ? 'Destination' : 'Selected hospital'} · ${h.name}`, pos: [h.lon, h.lat], kind: 'hosp' })),
       ...(dest ? [{ text: `Start · ${dest.name}`, pos: [dest.lon, dest.lat], kind: 'dest' }] : []),
     ]
     return [
@@ -489,7 +492,7 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
           ]
         : []),
     ]
-  }, [meta, route])
+  }, [meta, route, selectedHospital])
 
   const getTooltip = ({ layer, index }: PickingInfo) => {
     if (!layer || index < 0) return null

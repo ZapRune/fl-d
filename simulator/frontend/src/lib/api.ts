@@ -17,13 +17,14 @@ export type ModelInfo = {
   model: string
   target: string
   teacher: string
-  r2: number
+  r2: number | null
   mae_cm: number
   rmse_cm: number
   n_trees: number
   n_train_rows: number
   n_train_storms: number
   n_val_storms: number
+  evaluation?: { version: string; n_test_storms: number; n_test_rows: number; baseline: string; baseline_mae_cm: number }
   classification: { threshold_m: number; accuracy: number; precision: number; recall: number; f1: number }[]
   importance: { feature: string; label: string; share: number }[]
   presets: Record<string, { sim_pct_roads_15cm: number; ml_pct_roads_15cm: number }>
@@ -69,8 +70,18 @@ export type StormEvent = {
 
 export type RouteGeom = { coords: LonLat[]; time_s: number; length_m: number; n_edges: number }
 
+export type TripSelection = { start: LonLat; end: LonLat }
+export type RouteComparison = {
+  status: 'clear' | 'detour' | 'blocked'
+  current: RouteGeom | null
+  dry: RouteGeom | null
+  blocked: LonLat[][]
+  delay_s: number | null
+}
+
 export type SimResult = {
   scenario: Scenario
+  warnings?: string[]
   spatial?: {
     active_track: LonLat[]
     flow_paths: LonLat[][]
@@ -79,6 +90,7 @@ export type SimResult = {
   edges: number[] // depth, cm
   closed_edges_b64?: string
   buildings: number[] // depth, cm
+  newly_cut_off_buildings_b64?: string
   access: number[] // response time in 0.1 min units; 65535 = cut off
   overlay?: string
   stats: {
@@ -94,20 +106,16 @@ export type SimResult = {
     buildings: { total: number; wet: number; flooded: number; severe: number }
     area_km2: number
     max_depth_m: number
-    access: { cut_off: number; over_15min: number; median_min: number | null; median_min_dry: number }
+    access: { cut_off: number; over_15min: number; median_min: number | null; median_min_dry: number | null; cut_off_dry?: number; newly_cut_off?: number }
     hotspots: { name: string; flooded_km: number; impassable_km: number; max_depth_m: number }[]
   }
-  route: {
-    status: 'clear' | 'detour' | 'blocked'
+  route: RouteComparison & {
     vehicle: string
     clearance_m: number
     hospital: { id: string; name: string; lon: number; lat: number }
     dest: { id: string; name: string; lon: number; lat: number }
-    current: RouteGeom | null
-    dry: RouteGeom | null
-    blocked: LonLat[][]
-    delay_s: number | null
   }
+  trip?: RouteComparison & TripSelection & { start_snap_m: number; end_snap_m: number }
   timing_ms: { model: number; routing: number; total: number }
 }
 
@@ -117,6 +125,7 @@ export type SimRequest = Scenario & {
   hospital: string
   dest?: string
   dest_lonlat?: LonLat
+  trip?: TripSelection
 }
 
 export type RegionInfo = { id: string; name: string; bbox: number[]; default: boolean; built: boolean }

@@ -21,7 +21,7 @@ export default function Legend({ buildingMode, onBuildingMode, showWater, onShow
         <div className="sim-layer-options">
           {([['flood', 'Water depth', Building2], ['access', 'ER access', Siren]] as const).map(([value, label, Icon]) => <button key={value} type="button" onClick={() => onBuildingMode(value)} aria-pressed={buildingMode === value}><Icon size={16} aria-hidden="true" />{label}</button>)}
         </div>
-        <p className="sim-layer-unit">{buildingMode === 'access' ? 'Modeled response time · minutes' : 'Modeled water depth · meters'}</p>
+        <p className="sim-layer-unit">{buildingMode === 'access' ? 'Modeled response time · minutes' : 'Modeled water depth at building low point'}</p>
         <div className="sim-ramp">{ramp.map((step) => <div key={step.label}><i style={{ background: step.color }} /><span>{step.label}</span></div>)}</div>
       </section>
       <section>

@@ -126,8 +126,8 @@ export function Select({
   return (
     <label className="relative flex items-center gap-2 rounded-xl border border-white/[0.07] bg-black/25 px-2.5 py-2 transition-colors focus-within:border-cyan-400/50 hover:border-white/15">
       <Icon className="h-4 w-4 shrink-0 text-slate-400" />
-      <span className="sr-only">{label}</span>
       <select
+        aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full cursor-pointer appearance-none truncate bg-transparent pr-5 text-[13px] text-slate-100 outline-none"

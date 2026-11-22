@@ -66,14 +66,14 @@ export function accessColor(minutes: number | null): RGBA {
   return ramp(ACCESS, minutes)
 }
 
+// Sample the same ramp used by the buildings so the key matches the map.
 export const WATER_LEGEND = [
-  { label: '3 cm', color: 'rgb(120,220,255)' },
-  { label: '15 cm', color: 'rgb(70,175,255)' },
-  { label: '30 cm', color: 'rgb(40,130,245)' },
-  { label: '60 cm', color: 'rgb(30,90,220)' },
-  { label: '1.2 m', color: 'rgb(25,55,175)' },
-  { label: '2.5 m+', color: 'rgb(20,30,120)' },
-]
+  ['Dry', 0], ['3 cm', 0.03], ['15 cm', 0.15],
+  ['60 cm', 0.6], ['1.2 m', 1.2], ['2.5 m+', 2.5],
+].map(([label, depth]) => ({
+  label: label as string,
+  color: `rgb(${buildingFloodColor(depth as number).slice(0, 3).map(Math.round).join(',')})`,
+}))
 
 export const ACCESS_LEGEND = [
   { label: '<5', color: 'rgb(52,211,153)' },

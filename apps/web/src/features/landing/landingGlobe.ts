@@ -9,16 +9,17 @@ export interface LandingGlobe {
 
 const cameraProgress = (scrollProgress: number) => Math.max(0, Math.min(1, (scrollProgress - 0.36) / 0.55));
 
-export function createLandingGlobe(mount: HTMLElement, progress: number, onError: () => void): LandingGlobe {
+export function createLandingGlobe(mount: HTMLElement, progress: number, onError: () => void, onReady: () => void): LandingGlobe {
   const viewer = new Viewer(mount, {
     animation: false, timeline: false, baseLayerPicker: false, geocoder: false,
     homeButton: false, sceneModePicker: false, navigationHelpButton: false,
     fullscreenButton: false, infoBox: false, selectionIndicator: false,
     baseLayer: false, scene3DOnly: true, showRenderLoopErrors: false,
+    skyBox: false, contextOptions: { webgl: { alpha: true } },
     requestRenderMode: true, maximumRenderTimeChange: Infinity,
   });
   sharpenRendering(viewer, 2);
-  viewer.scene.backgroundColor = Color.fromCssColorString('#080f13');
+  viewer.scene.backgroundColor = Color.TRANSPARENT;
   viewer.scene.globe.enableLighting = false;
   viewer.scene.screenSpaceCameraController.enableInputs = false;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -36,6 +37,11 @@ export function createLandingGlobe(mount: HTMLElement, progress: number, onError
   };
   placeCamera();
   const stopImagery = installEarthImagery(viewer, () => {}, { detailedGlobe: true });
+  const stopReady = viewer.scene.postRender.addEventListener(() => {
+    if (!viewer.imageryLayers.get(0).ready || !viewer.scene.globe.tilesLoaded) return;
+    stopReady();
+    onReady();
+  });
   const stopError = viewer.scene.renderError.addEventListener(onError);
   const stopCamera = viewer.scene.preUpdate.addEventListener(() => {
     if (current === target) return;
@@ -57,6 +63,7 @@ export function createLandingGlobe(mount: HTMLElement, progress: number, onError
     },
     destroy() {
       stopCamera();
+      stopReady();
       stopError();
       stopImagery();
       viewer.destroy();

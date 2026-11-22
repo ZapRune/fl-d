@@ -5,11 +5,16 @@ services, and explore where relief should be prioritized.
 
 flŭd opens on a guided introduction to Houston. Choose one of five areas, design
 a storm, and watch modeled flood depths change on roads and 3D buildings. Then
-check which buildings lose modeled access to a hospital and compare census
+compare a trip in dry and flooded conditions, check which buildings lose modeled access to a hospital, and compare census
 tracts where flooding and social vulnerability overlap. All five areas run on
 flŭd's built-in flood simulator.
 
 ## Run locally
+
+To preview the landing page and **How it works** without preparing flood models,
+run `pnpm install --frozen-lockfile` and `pnpm --filter web dev`. Open
+[localhost:5173](http://localhost:5173/) and select **Explore Houston** to see
+the Earth reveal. Follow the setup below for the interactive flood simulator.
 
 Use Node **22.16.0**, pnpm **10.12.1**, and Python **3.13**. Git is the team
 synchronization boundary. Pull before starting and read `AGENTS.md`, `STATUS.md`,
@@ -45,9 +50,9 @@ Python environment. Alternatively, point to a hosted simulator map using
 pnpm dev
 ```
 
-Open [flŭd](http://127.0.0.1:5173/), follow **Explore Houston**, and use the
-button at the end of the introduction to choose an area. You can also go
-directly to the [five-area chooser](http://127.0.0.1:5173/#/simulate).
+Open [flŭd](http://127.0.0.1:5173/) and select **Start a simulation**, or go
+directly to the [five-area chooser](http://127.0.0.1:5173/#/simulate). Start
+with an area whose regional data and model are prepared.
 `pnpm dev` and `pnpm dev:integrated` run the same local stack.
 
 | Local service | Address |
@@ -74,8 +79,10 @@ four-step guide (the **Guide** button shows it again):
    path on the map.
 2. **Simulate community impact.** Select **Animate** to step the scenario up and
    watch road segments and buildings change.
-3. **Inspect emergency access.** In **Impact & routing**, choose a hospital and
-   vehicle, then place a pin to calculate a hypothetical route.
+3. **Compare a trip and inspect emergency access.** In **Impact & routing**,
+   choose a starting point, destination, and vehicle. Pick named places from
+   the menus or place both pins on the map. For a custom trip, the facility
+   selector controls the separate hospital access calculation.
 4. **Prioritize relief.** Open **Relief priorities** to compare affected census
    tracts using CDC Social Vulnerability Index indicators and split a budget.
 
@@ -90,9 +97,7 @@ Use the area selector to open another region.
 - **Flood model.** A process-based simulator (coastal surge, drain backflow and
   rainfall ponding) generates depth labels for synthetic storms. An XGBoost
   surrogate is trained to reproduce those depths, so each change re-predicts
-  every road segment, building footprint and ground cell in milliseconds. Each
-  region trains on about 2.1 million rows from 838 storms and validates on
-  162 held-out storms.
+  every road segment, building footprint and ground cell in milliseconds. New runs split synthetic storms into training, early-stopping validation, and a separate final test set. Older artifacts report validation metrics.
 - **Emergency access.** NetworkX A\* and SciPy Dijkstra route over roads that
   stay passable for the selected vehicle (car 15 cm, ambulance 30 cm, rescue
   truck 75 cm of water).

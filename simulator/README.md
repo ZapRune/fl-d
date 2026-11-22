@@ -1,6 +1,6 @@
 # Houston flood simulator
 
-AquaGrid opens from EarthLab’s Houston area chooser. All five areas and the standalone map use the same 3D simulator, with regional datasets, storm presets, overlays, impact estimates and pin-to-hospital routes.
+AquaGrid opens from flŭd’s Houston area chooser. All five areas and the standalone map use the same 3D simulator, with regional datasets, storm presets, overlays, impact estimates, and dry-versus-flooded trips between two chosen points.
 
 ## Prepare a region
 
@@ -27,7 +27,7 @@ From `simulator/backend`, prepare all five zones sequentially with the simulator
 ../.venv/Scripts/python.exe -m aquagrid.prepare_zones
 ```
 
-After completing the [EarthLab setup](../README.md), run `pnpm dev` from the repository root. Select **Open EarthLab** on the product site or open the [Houston area chooser](http://127.0.0.1:5173/#/simulate) directly. The [standalone map](http://127.0.0.1:5174) also accepts `?region=<id>`. The [AquaGrid region catalog](http://127.0.0.1:8001/api/regions) reports which regions are built.
+After completing the [flŭd setup](../README.md), run `pnpm dev` from the repository root. Select **Start a simulation** on the landing page or open the [Houston area chooser](http://127.0.0.1:5173/#/simulate) directly. The [standalone map](http://127.0.0.1:5174) also accepts `?region=<id>`. The [AquaGrid region catalog](http://127.0.0.1:8001/api/regions) reports which regions are built.
 
 For standalone development, start Uvicorn with `python -m uvicorn aquagrid.api:app --port 8000` from `simulator/backend` using the simulator environment, and `npm run dev -- --port 5174` from `simulator/frontend`. Set the frontend process variable `AQUAGRID_API` when its API runs at a different address. To embed a separately served simulator, set `VITE_SIMULATOR_URL` to its public URL before starting or building the atlas. A static deployment of the simulator must forward its `/api/` requests to the AquaGrid backend.
 
@@ -38,7 +38,12 @@ Open any Houston area and choose a storm, then select **Relief money** in the he
 The overlay follows whatever storm is on screen, including storm paths. Census tracts and CDC/ATSDR Social Vulnerability Index measures come from `public/relief/<region>.json`. The browser matches each building to its tract and spreads a tract's residents evenly over its buildings. The share of flooded buildings (over 15 cm) then estimates residents in flooded homes. Need adds residents in deep water (over 50 cm), without a car, or 65+ or disabled and cut off from the selected hospital. The budget is split in proportion to vulnerability-weighted need, in $100 steps. This is an exploratory rule from a modeled scenario, not a needs assessment. Rebuild the tract files with `ml/relief/build_relief.py`; inputs are listed in [the provenance note](../data/provenance/relief_sources.md).
 
 ## Interpretation
-## Interpretation
+
+### Compare a trip in dry weather and under a storm
+
+Open **Impact & routing**, then choose a starting place and a destination. Both ends can be set with a map pin. The menus also let you choose a named place without using the map. For a custom trip, the facility selector still controls the separate hospital-access and infrastructure calculations.
+
+The simulator compares the fastest paths through the same road network under dry and modeled flood conditions. It shows how far each selected pin was snapped to a road node. Travel time covers the modeled road path and excludes the distance from a pin to its snapped node, live traffic and field conditions.
 
 ### Compare infrastructure improvements under an event
 
@@ -61,3 +66,9 @@ is retained. Run catalog regressions from `simulator/backend` with the simulator
 `python -m unittest discover -s tests -v`.
 
 The route estimate uses the selected vehicle and modeled road depths. Travel time excludes live traffic. Roads are treated as undirected. Route availability in this scenario does not establish current road safety or emergency access.
+
+### Model evaluation and operating limits
+
+New training runs reserve separate groups of synthetic storms for training, early stopping, and final evaluation. The reported test MAE can be compared to a constant baseline that predicts the training median. Previously built models keep their original validation metrics. Both evaluations compare the surrogate to generated flood depths. Real flood-depth and road-closure records would be required to estimate performance during an observed storm.
+
+Simulation responses flag settings outside the training ranges. The facility-access result separates buildings already disconnected in dry conditions from buildings the modeled storm newly disconnects. Requests with invalid routing selections receive a validation error. If prepared model inputs are unavailable, or a worker is at capacity, the simulator returns a service-unavailable response.

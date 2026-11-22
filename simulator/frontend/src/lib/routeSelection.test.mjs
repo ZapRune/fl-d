@@ -19,3 +19,11 @@ test('new endpoints or vehicle reject an obsolete route result', () => {
     { dest_lonlat: undefined, dest: 'houston-heights' },
   ]) assert.equal(sameRouteSelection(request, { ...request, ...change }), false)
 })
+
+test('changing either trip endpoint invalidates the pending comparison', () => {
+  const trip = { start: [-95.38, 29.76], end: [-95.36, 29.75] }
+  const first = { ...request, trip }
+  assert.equal(sameRouteSelection(first, { ...request, trip: structuredClone(trip) }), true)
+  assert.equal(sameRouteSelection(first, { ...request, trip: { ...trip, start: [-95.37, 29.76] } }), false)
+  assert.equal(sameRouteSelection(first, { ...request, trip: { ...trip, end: [-95.36, 29.74] } }), false)
+})

@@ -58,3 +58,9 @@ test('custom amounts accept commas, dollar signs and k/m shorthand', () => {
   assert.ok(Number.isNaN(parseAmount('lots')))
   assert.ok(Number.isNaN(parseAmount('-5')))
 })
+
+test('storm relief access uses the newly disconnected buildings when provided', () => {
+  const [needs] = tractNeeds([tract('a', 0)], Int16Array.from([0, 0]), [0, 0],
+    [65535, 65535], Uint8Array.of(0b10))
+  assert.equal(needs.cutOff, 100)
+})

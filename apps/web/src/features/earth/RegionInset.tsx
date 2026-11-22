@@ -5,9 +5,13 @@ import { regionBBox, type Region } from "./zones";
 export function RegionInset({
   region,
   highlighted,
+  zoneHref,
+  onPreview,
 }: {
   region: Region;
   highlighted: string | null;
+  zoneHref?: (zoneId: string) => string;
+  onPreview?: (zoneId: string) => void;
 }) {
   const [west, south, east, north] = regionBBox(region);
   const midLat = (south + north) / 2;
@@ -20,8 +24,8 @@ export function RegionInset({
     <figure className="region-inset">
       <svg
         viewBox="0 0 320 156"
-        role="img"
-        aria-label="Houston zone index. Lettered boxes locate the study areas listed below."
+        role={zoneHref ? "group" : "img"}
+        aria-label="Houston study areas. Letters correspond to the area list."
       >
         <image
           href={url}
@@ -33,8 +37,8 @@ export function RegionInset({
         />
         {region.zones.map((zone, i) => {
           const [w, s, e, n] = zone.bbox;
-          return (
-            <g key={zone.id} className={highlighted === zone.id ? "index-hot" : ""}>
+          const marker = (
+            <g className={highlighted === zone.id ? "index-hot" : ""}>
               <rect
                 className="index-box"
                 x={x(w)}
@@ -52,6 +56,12 @@ export function RegionInset({
               </text>
             </g>
           );
+          return zoneHref ? (
+            <a key={zone.id} href={zoneHref(zone.id)} aria-label={`Open ${zone.name} on the map`}
+              onFocus={() => onPreview?.(zone.id)} onMouseEnter={() => onPreview?.(zone.id)}>
+              {marker}
+            </a>
+          ) : <g key={zone.id}>{marker}</g>;
         })}
         <path className="index-north" d="M15 32V15m-4 6 4-6 4 6" />
         <text className="index-n" x="15" y="44" textAnchor="middle">

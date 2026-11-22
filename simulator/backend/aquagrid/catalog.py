@@ -42,9 +42,12 @@ def public_meta(region: Region) -> dict:
     out = region.out_dir
     meta = json.loads((out / "static" / "meta.json").read_bytes())
     metrics = json.loads((out / "model" / "metrics.json").read_bytes())
+    model = {key: metrics[key] for key in MODEL_FIELDS}
+    if "evaluation" in metrics:
+        model["evaluation"] = metrics["evaluation"]
     return {
         **meta,
         "presets": HOUSTON_PRESETS,
         "vehicles": VEHICLES,
-        "model": {key: metrics[key] for key in MODEL_FIELDS},
+        "model": model,
     }

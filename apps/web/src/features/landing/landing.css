@@ -43,3 +43,180 @@
   .area-caption { display:none; }
   .area-heading { margin-bottom:14px; }
 }
+/* Navigation and study-area selection stay deliberately square and map-led. */
+.landing-header{display:grid;grid-template-columns:1fr auto 1fr;gap:12px}.landing-open{justify-self:end}.landing-how{border:0;background:transparent;color:#d8e7f1;min-height:44px;padding:8px 14px;font-size:15px}.landing-how:hover{text-decoration:underline;text-underline-offset:5px}.landing-how:focus-visible{outline:2px solid #a8c8e5;outline-offset:3px}.flud-mark{color:#a8c8e5;flex:none}.landing-pixels{position:absolute;inset:0;opacity:.24;pointer-events:none}.landing-diagram p{margin:-6px 0 0;text-align:center;color:#a7c0d3;font:11px 'Source Sans 3 Variable',sans-serif;letter-spacing:.12em}.landing-diagram p span{letter-spacing:0;text-transform:none}.diagram-node{animation:diagram-input 4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}@keyframes diagram-input{0%,65%,100%{opacity:.55;transform:scale(1)}35%{opacity:1;transform:scale(1.8)}}
+.area-chooser{width:calc(100% - 32px);max-width:none;height:calc(100svh - 32px);max-height:none;border-radius:0;display:none;flex-direction:column}.area-chooser[open]{display:flex}.area-spread{flex:1;min-height:0;grid-template-columns:1fr 1fr}.area-chooser nav{display:flex;flex-direction:column;justify-content:center}.area-chooser nav a{flex:1;max-height:110px;padding:16px}.area-preview .region-inset{min-height:250px}
+@media(max-width:760px){.landing-header{grid-template-columns:auto 1fr auto;gap:2px}.landing-how{font-size:12px;padding:6px;justify-self:center}.landing-open{font-size:12px;padding:8px;gap:4px}.landing-diagram p{font-size:9px;letter-spacing:.06em}.area-chooser{height:calc(100svh - 20px);width:calc(100% - 20px)}.area-spread{grid-template-columns:1fr;grid-template-rows:minmax(135px,40%) 1fr;gap:12px}.area-preview .region-inset{min-height:0}.area-chooser nav a{min-height:54px;padding:8px}.area-heading h2{font-size:30px}}
+@media(prefers-reduced-motion:reduce){.diagram-node{animation:none}}
+
+.landing-copy {
+  position: relative;
+  z-index: 1;
+  padding: clamp(18px, 2.6vw, 36px);
+  max-width: min(540px, 100%);
+  background: #081118e0;
+  border-left: 1px solid #7897aa80;
+}
+.diagram-field { position: relative; width: 100%; }
+.diagram-plot { position: relative; aspect-ratio: 1; }
+.landing-diagram { opacity: 1; pointer-events: none; }
+.landing-diagram svg { position: absolute; inset: 0; }
+.diagram-topic {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-height: 44px;
+  padding: 2px 5px;
+  color: #c9dce9;
+  white-space: nowrap;
+  font-size: clamp(12px, 1.35vw, 18px);
+}
+.diagram-topic:hover, .diagram-topic:focus-visible, .diagram-topic[aria-pressed=true] {
+  background: #162631;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+.diagram-active line { stroke: #b9eddf; opacity: .95; stroke-width: 2; }
+.diagram-active .diagram-node { fill: #b9eddf; animation: none; }
+.diagram-detail {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(290px, 64%);
+  background: #101d27f5;
+  border: 1px solid #66899c;
+  padding: 14px 17px;
+}
+.landing .diagram-detail h2 { margin: 0 0 9px; font-size: 24px; text-wrap: initial; }
+.landing .diagram-detail p {
+  margin: 6px 0;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.35;
+  letter-spacing: 0;
+  color: #dae7ef;
+}
+.diagram-detail strong { display: block; color: #a2dcce; }
+.landing-diagram .diagram-caption { margin-top: -13px; }
+@media (max-width: 850px) {
+  .landing-intro { flex-direction: column; align-items: stretch; justify-content: center; gap: 20px; }
+  .landing-diagram { position: relative; inset: auto; transform: none; width: min(100%, 430px); align-self: center; }
+  .landing-copy { max-width: 100%; }
+  .diagram-detail { width: min(290px, 63%); padding: 8px 10px; }
+  .landing .diagram-detail h2 { font-size: 19px; }
+  .landing .diagram-detail p { font-size: 12px; }
+}
+@media (max-width: 850px) {
+  .diagram-topic { z-index: 1; }
+  .diagram-detail { position: static; transform: none; width: 100%; margin: -4px 0 18px; }
+  .landing-diagram .diagram-caption { margin-top: 0; }
+  .landing-intro .landing-scroll { display: none; }
+}
+.diagram-plot, .diagram-detail { pointer-events: auto; }
+
+/* Houston aerial imagery gives the landing diagram a geographic anchor. */
+.landing-visual::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 22%;
+  opacity: var(--intro-map-opacity, .19);
+  background: url('/map/houston-detail-usgs.webp') center / cover no-repeat;
+  filter: grayscale(1) contrast(1.1);
+  mask-image: linear-gradient(90deg, transparent, #000 29%, #000 82%, transparent);
+}
+.landing-header {
+  background: #0a131bea;
+  border-bottom: 1px solid #334552;
+  padding-block: 12px;
+}
+.landing-open, .landing-primary { border-radius: 0; }
+.landing-intro .landing-copy {
+  width: min(100%, 555px);
+  max-width: 46%;
+  background: #081118e8;
+  border: 1px solid #405362;
+  border-left: 3px solid #91b4d3;
+}
+.landing-intro h1 {
+  font-size: clamp(41px, 4.65vw, 74px);
+  margin: 0;
+  line-height: 1.03;
+}
+.landing-copy .landing-location {
+  margin: 0 0 16px;
+  color: #a5d7cb;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.landing-actions { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+.landing-actions .landing-primary { justify-content: space-between; gap: 16px; }
+.landing-actions .landing-text-link { margin: 0; min-height: 44px; font-size: 14px; }
+.landing-diagram .diagram-caption { color: #cee1ea; }
+.area-heading p { margin: 8px 0 0; color: #b8cad8; }
+.area-heading button { border: 1px solid #60778a; }
+.area-spread { border-top: 1px solid #405362; padding-top: 16px; }
+.area-preview { border: 1px solid #3d5363; }
+.area-preview svg a { cursor: pointer; }
+.area-preview svg a:focus-visible .index-box { stroke: #fff; stroke-width: 2; }
+.area-chooser nav { justify-content: start; }
+.area-chooser nav a { max-height: none; border-left: 2px solid transparent; }
+.area-chooser nav a[data-preview=true] { border-left-color: #aad0ed; }
+.area-chooser nav .area-row-summary { margin-top: 4px; color: #c3d3df; }
+.area-chooser nav a svg { color: #acd2ee; }
+@media (max-width: 850px) {
+  .landing-intro { padding-block: 98px 88px; }
+  .landing-intro .landing-copy { max-width: 100%; }
+  .landing-intro .landing-diagram { max-width: 390px; }
+  .landing-visual::before { inset-inline-start: 0; }
+}
+@media (max-width: 760px) {
+  .landing-header { padding: 8px 12px; }
+  .landing-intro h1 { font-size: clamp(37px, 8.6vw, 52px); }
+  .landing-intro .landing-copy p:not(.landing-location) { margin: 13px 0 17px; }
+  .area-chooser { padding: 14px; }
+  .area-spread { grid-template-rows: clamp(125px, 24dvh, 210px) auto; min-height: min-content; }
+  .area-chooser nav .area-row-summary { display: none; }
+}
+.landing-copy .landing-location { max-width: none; }
+@media (max-width: 760px) {
+  .landing-footer { position: relative; }
+}
+
+.landing-space {
+  position: absolute;
+  inset: 0;
+  opacity: var(--space-opacity, 0);
+  pointer-events: none;
+}
+.landing-pixels { opacity: calc(.24 * (1 - var(--space-opacity, 0)) * (1 - var(--earth-opacity, 0))); }
+
+.landing-space-chapter {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+.landing-earth-poster {
+  position: absolute;
+  inset: 0;
+  opacity: var(--earth-poster-opacity, 0);
+  pointer-events: none;
+}
+.landing-earth-poster img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(75svh, 45vw);
+  height: auto;
+  transform: translate(-50%, -50%);
+}
+.landing-earth-poster span {
+  position: absolute;
+  bottom: 44px;
+  right: 12px;
+  color: #c3ceda;
+  font-size: 10px;
+}
+.landing-fallback { opacity: var(--earth-fallback-opacity, 0); }

@@ -115,3 +115,76 @@ button,select,input { font:inherit; } button { cursor:pointer; } button:disabled
 .storm-draw p { flex-basis:100%; text-align:center; }
 .storm-draw button { min-height:44px; }
 .storm-draw .storm-apply { border-color:var(--sim-amber); color:var(--sim-amber); }
+.sim-storm-side{position:absolute;z-index:4;left:12px;top:12px;bottom:12px;width:320px;max-width:calc(50% - 24px)}
+.route-pick-start{display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;background:#223647;color:#c9e4f4;border:1px solid #587c96;text-align:left;font-size:13px}.route-pick-start:hover{background:#30495c}
+.route-pick-hint{position:absolute;z-index:4;left:50%;top:12px;transform:translateX(-50%);max-width:calc(100% - 24px);padding:8px 12px;background:#1c2632;border:1px solid #729ab9;color:#e7f2fa;font-size:13px}.route-pick-hint button{margin-left:8px;min-height:40px;padding:6px 10px;border:1px solid #607b90;background:#263b4d;color:#e7f2fa}
+@media (761px <= width < 1050px) {
+  .sim-storm-side { width: 27vw; }
+  .sim-panel-host { width: 34vw; }
+  .has-panel .sim-map-controls { right: calc(34vw + 24px); }
+}
+
+/* Dock desktop instruments beside the map so they never cover routing pins. */
+.sim-shell {
+  --dock-width: clamp(290px, 24vw, 360px);
+  --dock-left: 0px;
+  --dock-right: 0px;
+}
+.sim-shell.dock-storm, .sim-shell.dock-both { --dock-left: var(--dock-width); }
+.sim-shell.dock-right, .sim-shell.dock-both { --dock-right: var(--dock-width); }
+.sim-map { inset-inline: var(--dock-left) var(--dock-right); }
+.sim-summary { left: calc(var(--dock-left) + 16px); }
+.sim-impact-strip {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  bottom: 88px;
+  left: calc(var(--dock-left) + 12px);
+  max-width: calc(100% - var(--dock-left) - var(--dock-right) - 24px);
+  display: flex;
+  background: #13202aef;
+  border: 1px solid #536c7c;
+  border-left: 2px solid #8dbace;
+  pointer-events: none;
+}
+.sim-impact-strip div { padding: 8px 12px; }
+.sim-impact-strip div + div { border-left: 1px solid #405566; }
+.sim-impact-strip dt { font-size: 11px; line-height: 1.25; color: #c4d5df; }
+.sim-impact-strip dd { margin: 3px 0 0; font-size: 19px; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sim-impact-strip dd span { font-size: 12px; font-weight: 400; }
+.sim-header button[aria-expanded=true], .sim-header button[aria-pressed=true] {
+  background: #243748;
+  border-color: #526f84;
+}
+.sim-panel > header { background: #141f29; }
+.sim-play { border-radius: 0; }
+@media (min-width: 761px) {
+  .sim-shell .sim-panel-host, .sim-shell .sim-storm-side {
+    inset: 0 0 0 auto;
+    width: var(--dock-width);
+    max-width: none;
+  }
+  .sim-shell.dock-storm .sim-panel-host, .sim-shell .sim-storm-side { inset-inline: 0 auto; }
+  .sim-shell .sim-map-controls { right: 12px; }
+}
+@media (min-width: 761px) and (max-width: 1050px) {
+  .sim-shell { --dock-width: min(30vw, 290px); }
+  .sim-impact-strip div { padding-inline: 7px; }
+}
+@media (max-width: 760px) {
+  .sim-impact-strip { bottom: 104px; }
+  .sim-impact-strip div { padding: 6px 8px; }
+  .sim-impact-strip dd { font-size: 16px; }
+  .sim-impact-strip dt { font-size: 10px; }
+  .sim-header { padding-inline: 8px; gap: 4px; }
+  .sim-header nav button { flex-direction: column; gap: 2px; font-size: 9px; line-height: 1; padding: 3px 0; }
+  .sim-header nav button > span { display: block; }
+  .sim-header nav .sim-nav-wide, .sim-header nav button:first-child[aria-label="Storm sound"] > span { display: none; }
+  .sim-header nav button svg { width: 15px; height: 15px; }
+  .sim-brand img { width: 24px; height: 24px; }
+  .sim-brand { gap: 4px; font-size: 15px; }
+  .sim-summary { left: 12px; }
+}
+@media (max-width: 350px) {
+  .sim-brand > span { display: none; }
+}

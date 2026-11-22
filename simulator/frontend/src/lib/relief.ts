@@ -84,7 +84,7 @@ function inside(x: number, y: number, ring: [number, number][]) {
 export type Needs = { flooded: number; deep: number; noCar: number; cutOff: number }
 
 /** Residents by kind of need in each tract, from one modeled result. */
-export function tractNeeds(tracts: ReliefTract[], assign: Int16Array, depthCm: ArrayLike<number>, access: ArrayLike<number>): Needs[] {
+export function tractNeeds(tracts: ReliefTract[], assign: Int16Array, depthCm: ArrayLike<number>, access: ArrayLike<number>, newlyCutOff?: Uint8Array): Needs[] {
   const n = new Float64Array(tracts.length)
   const flooded = new Float64Array(tracts.length)
   const deep = new Float64Array(tracts.length)
@@ -96,7 +96,8 @@ export function tractNeeds(tracts: ReliefTract[], assign: Int16Array, depthCm: A
     const d = depthCm[i] ?? 0
     if (d > FLOODED_CM) flooded[t] += 1
     if (d > DEEP_CM) deep[t] += 1
-    if (access[i] === CUT_OFF) cut[t] += 1
+    const lostAccess = newlyCutOff ? (newlyCutOff[i >> 3] & (1 << (i & 7))) !== 0 : access[i] === CUT_OFF
+    if (lostAccess) cut[t] += 1
   }
   return tracts.map((tract, t) => {
     if (!n[t]) return { flooded: 0, deep: 0, noCar: 0, cutOff: 0 }

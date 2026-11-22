@@ -17,7 +17,7 @@ import {
   Truck,
   Waves,
 } from 'lucide-react'
-import type { LonLat, Meta, SimRequest, SimResult } from '../lib/api'
+import type { LonLat, Meta, RouteComparison, SimRequest, SimResult } from '../lib/api'
 import StormPlanning from './StormPlanning'
 import { Kpi, Panel, SectionTitle, Segmented, Select } from './ui'
 
@@ -31,16 +31,24 @@ type Props = {
   onHospital: (v: string) => void
   dest: { id?: string; lonlat?: LonLat }
   onDest: (id: string) => void
+  tripEnd: LonLat | null
+  onTripEnd: (point: LonLat | null) => void
+  onPickEndpoint: (endpoint: 'start' | 'end') => void
   onCollapse: () => void
 }
 
 const fmtMin = (s: number) => `${(s / 60).toFixed(1)} min`
 const fmtKm = (m: number) => `${(m / 1000).toFixed(1)} km`
 
-export default function ImpactPanel({ meta, result, request, vehicle, onVehicle, hospital, onHospital, dest, onDest, onCollapse }: Props) {
+export default function ImpactPanel({ meta, result, request, vehicle, onVehicle, hospital, onHospital, dest, onDest, tripEnd, onTripEnd, onPickEndpoint, onCollapse }: Props) {
   const s = result?.stats
   const hasStart = Boolean(dest.id || dest.lonlat)
-  const r = hasStart ? result?.route : undefined
+  const r = hasStart ? (tripEnd ? result?.trip : result?.route) : undefined
+  const startName = dest.lonlat ? 'Start pin' : meta.neighborhoods.find(point => point.id === dest.id)?.name ?? 'Start'
+  const namedEnd = tripEnd && meta.neighborhoods.find(point => point.lon === tripEnd[0] && point.lat === tripEnd[1])
+  const endName = tripEnd
+    ? (namedEnd ? namedEnd.name : 'Destination pin')
+    : meta.hospitals.find(point => point.id === hospital)?.name ?? 'Selected hospital'
   const vehLabel = meta.vehicles[vehicle]?.label.toLowerCase() ?? vehicle
   return (
     <Panel>
@@ -58,7 +66,78 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
       </header>
       <div className="space-y-4 overflow-y-auto px-3.5 py-3">
         <section>
+          <SectionTitle icon={Route}>Modeled route</SectionTitle>
+          <div className="space-y-2">
+            <p className="px-1 text-[12px] font-semibold text-cyan-200">From · Starting point</p>
+            <Select icon={MapPin} label="Starting point" value={dest.id ?? (dest.lonlat ? 'custom' : '')} onChange={onDest}>
+              {!hasStart && (
+                <option value="" disabled className="bg-slate-900">
+                  Choose a starting point
+                </option>
+              )}
+              {dest.lonlat && (
+                <option value="custom" className="bg-slate-900">
+                  Dropped pin ({dest.lonlat[1].toFixed(4)}, {dest.lonlat[0].toFixed(4)})
+                </option>
+              )}
+              {meta.neighborhoods.map((n) => (
+                <option key={n.id} value={n.id} className="bg-slate-900">
+                  {n.name}
+                </option>
+              ))}
+            </Select>
+            <button type="button" className="route-pick-start" onClick={() => onPickEndpoint('start')}><MapPin size={16} aria-hidden="true" /> Choose starting point on map</button>
+            <p className="px-1 text-[12px] font-semibold text-rose-200">To · Destination</p>
+            <Select icon={Hospital} label="Destination" value={tripEnd ? (namedEnd ? `place:${namedEnd.id}` : 'trip-pin') : hospital} onChange={id => {
+              if (id === 'trip-pin') return
+              if (id.startsWith('place:')) {
+                const point = meta.neighborhoods.find(candidate => candidate.id === id.slice(6))
+                if (point) onTripEnd([point.lon, point.lat])
+              } else {
+                onTripEnd(null)
+                onHospital(id)
+              }
+            }}>
+              {tripEnd && !namedEnd && <option value="trip-pin">Destination pin ({tripEnd[1].toFixed(4)}, {tripEnd[0].toFixed(4)})</option>}
+              <optgroup label="Emergency facilities">
+                {meta.hospitals.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
+              </optgroup>
+              <optgroup label="Places in this area">
+                {meta.neighborhoods.map(point => <option key={point.id} value={`place:${point.id}`}>{point.name}</option>)}
+              </optgroup>
+            </Select>
+            <button type="button" className="route-pick-start" onClick={() => onPickEndpoint('end')}><MapPin size={16} aria-hidden="true" /> Choose destination on map</button>
+            {tripEnd && <div className="space-y-1">
+              <p className="text-xs text-slate-300">Choose the facility used for hospital access and infrastructure comparisons.</p>
+              <Select icon={Hospital} label="Facility for access analysis" value={hospital} onChange={onHospital}>
+                {meta.hospitals.map(point => <option key={point.id} value={point.id}>{point.name}</option>)}
+              </Select>
+            </div>}
+            <p className="flex items-center gap-1.5 px-1 text-[11px] text-slate-500">
+              <MousePointerClick className="h-3.5 w-3.5" /> Select a starting point and destination to calculate a modeled route.
+            </p>
+            <Segmented
+              value={vehicle}
+              onChange={onVehicle}
+              options={[
+                { value: 'sedan', label: 'Car', icon: Car, hint: '15 cm' },
+                { value: 'ambulance', label: 'Ambulance', icon: Ambulance, hint: '30 cm' },
+                { value: 'truck', label: 'Rescue', icon: Truck, hint: '75 cm' },
+              ]}
+            />
+            {!hasStart ? (
+              <p role="status" className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 text-[12px] leading-snug text-slate-300">
+                No route yet. Drop a pin on the map or choose a starting point to plan a route to your destination.
+              </p>
+            ) : r ? <RouteStatus r={r} vehLabel={vehLabel} startName={startName} endName={endName} /> : !result && <p role="status" className="px-1 text-[12px] text-emerald-200">Calculating route and estimated travel time…</p>}
+            {tripEnd && result?.trip && <p className="text-xs text-slate-400">Road network snaps · start {result.trip.start_snap_m} m · destination {result.trip.end_snap_m} m</p>}
+            {tripEnd && hasStart && result && !result.trip && <p role="status" className="text-xs text-slate-300">This simulator server does not support two-point routes yet.</p>}
+          </div>
+        </section>
+
+        <section>
           <SectionTitle icon={Waves}>Scenario impact</SectionTitle>
+          {result?.warnings?.map(warning => <p key={warning} className="mb-2 text-sm text-amber-200">{warning}</p>)}
           <div className="grid grid-cols-2 gap-2">
             <Kpi
               icon={Waves}
@@ -91,11 +170,14 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
               unit="bldgs"
               sub={
                 s && s.access.median_min !== null
-                  ? `median response ${s.access.median_min} min (dry ${s.access.median_min_dry})`
+                  ? `median response ${s.access.median_min} min (dry ${s.access.median_min_dry ?? "—"})`
                   : ' '
               }
             />
           </div>
+          {s?.access.newly_cut_off !== undefined && <p className="mt-2 text-xs text-slate-300">
+            {s.access.newly_cut_off.toLocaleString()} newly cut off · {s.access.cut_off_dry?.toLocaleString()} already cut off in dry weather
+          </p>}
           <p className="mt-2 px-1 text-[10.5px] leading-snug text-slate-500">
             Each road segment and building footprint is scored by the modeled depth at its lowest point. Flagged segments
             count at full length, so these figures are not a measured submerged length or area.
@@ -127,54 +209,6 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
         </details>}
 
         <StormPlanning regionId={meta.region.id} request={request} />
-        <section>
-          <SectionTitle icon={Route}>Modeled route</SectionTitle>
-          <div className="space-y-2">
-            <p className="px-1 text-[12px] font-semibold text-cyan-200">From · Starting point</p>
-            <Select icon={MapPin} label="Starting point" value={dest.id ?? (dest.lonlat ? 'custom' : '')} onChange={onDest}>
-              {!hasStart && (
-                <option value="" disabled className="bg-slate-900">
-                  Choose a starting point
-                </option>
-              )}
-              {dest.lonlat && (
-                <option value="custom" className="bg-slate-900">
-                  Dropped pin ({dest.lonlat[1].toFixed(4)}, {dest.lonlat[0].toFixed(4)})
-                </option>
-              )}
-              {meta.neighborhoods.map((n) => (
-                <option key={n.id} value={n.id} className="bg-slate-900">
-                  {n.name}
-                </option>
-              ))}
-            </Select>
-            <p className="px-1 text-[12px] font-semibold text-rose-200">To · Destination hospital</p>
-            <Select icon={Hospital} label="Destination hospital" value={hospital} onChange={onHospital}>
-              {meta.hospitals.map((h) => (
-                <option key={h.id} value={h.id} className="bg-slate-900">
-                  {h.name}
-                </option>
-              ))}
-            </Select>
-            <p className="flex items-center gap-1.5 px-1 text-[11px] text-slate-500">
-              <MousePointerClick className="h-3.5 w-3.5" /> Drop a starting pin; we calculate the fastest available route to your selected hospital.
-            </p>
-            <Segmented
-              value={vehicle}
-              onChange={onVehicle}
-              options={[
-                { value: 'sedan', label: 'Car', icon: Car, hint: '15 cm' },
-                { value: 'ambulance', label: 'Ambulance', icon: Ambulance, hint: '30 cm' },
-                { value: 'truck', label: 'Rescue', icon: Truck, hint: '75 cm' },
-              ]}
-            />
-            {!hasStart ? (
-              <p role="status" className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 text-[12px] leading-snug text-slate-300">
-                No route yet. Drop a pin on the map or choose a starting point to plan a route to the selected hospital.
-              </p>
-            ) : r ? <RouteStatus r={r} vehLabel={vehLabel} /> : <p role="status" className="px-1 text-[12px] text-emerald-200">Calculating route and estimated travel time…</p>}
-          </div>
-        </section>
 
         {s && s.hotspots.length > 0 && (
           <section>
@@ -212,7 +246,7 @@ export default function ImpactPanel({ meta, result, request, vehicle, onVehicle,
   )
 }
 
-function RouteStatus({ r, vehLabel }: { r: NonNullable<SimResult['route']>; vehLabel: string }) {
+function RouteStatus({ r, vehLabel, startName, endName }: { r: RouteComparison; vehLabel: string; startName: string; endName: string }) {
   if (r.status === 'blocked') {
     return (
       <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3">
@@ -224,7 +258,7 @@ function RouteStatus({ r, vehLabel }: { r: NonNullable<SimResult['route']>; vehL
           No available modeled route
         </div>
         <p className="mt-1 text-[12px] leading-snug text-rose-100/80">
-          {r.dest.name} is cut off from {r.hospital.name.split(' (')[0]} for an {vehLabel}.{' '}
+          No modeled trip from {startName} to {endName} by {vehLabel}.{' '}
           {r.blocked.length > 0 && `${r.blocked.length} segments of the usual route are under water.`}
         </p>
         {r.dry && <p className="mt-1.5 font-mono text-[11px] text-rose-200/60">dry-weather trip: {fmtMin(r.dry.time_s)}</p>}
@@ -244,7 +278,7 @@ function RouteStatus({ r, vehLabel }: { r: NonNullable<SimResult['route']>; vehL
         </span>
         <span className="font-mono text-[15px] font-semibold tabular-nums text-white">{fmtMin(cur.time_s)} est.</span>
       </div>
-      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px] text-slate-300"><dt className="font-semibold text-cyan-200">From</dt><dd>{r.dest.name}</dd><dt className="font-semibold text-rose-200">To</dt><dd>{r.hospital.name}</dd></dl>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[11px] text-slate-300"><dt className="font-semibold text-cyan-200">From</dt><dd>{startName}</dd><dt className="font-semibold text-rose-200">To</dt><dd>{endName}</dd></dl>
       <p className="mt-1 text-[10px] text-slate-400">Scenario estimate; excludes live traffic and assumes two-way travel.</p>
       <div className="mt-1 flex justify-between font-mono text-[11px] text-slate-400">
         <span>{fmtKm(cur.length_m)}</span>
@@ -280,7 +314,7 @@ function ModelCard({ meta, result }: { meta: Meta; result: SimResult | null }) {
       </button>
       <div className="grid grid-cols-4 gap-1 border-t border-white/[0.05] px-3 py-2 text-center">
         {[
-          ['R²', m.r2.toFixed(3)],
+          ['R²', m.r2?.toFixed(3) ?? '—'],
           ['MAE', `${m.mae_cm} cm`],
           ['F1@30cm', f1.toFixed(3)],
           ['trees', String(m.n_trees)],
@@ -301,7 +335,8 @@ function ModelCard({ meta, result }: { meta: Meta; result: SimResult | null }) {
           <p>
             <span className="text-slate-200">XGBoost surrogate</span> predicting water depth at the lowest point of every
             road segment, building footprint and 17 m ground cell. Trained on {(m.n_train_rows / 1e6).toFixed(1)}M samples
-            from {m.n_train_storms} simulated storms ({m.teacher}); scored on {m.n_val_storms} held-out storms.
+            from {m.n_train_storms} simulated storms ({m.teacher}); scored on {(m.evaluation?.n_test_storms ?? m.n_val_storms)} synthetic storms.
+            {m.evaluation ? ` Baseline MAE: ${m.evaluation.baseline_mae_cm} cm (${m.evaluation.baseline}).` : ' This artifact reports validation scores from early stopping.'}
           </p>
           <div>
             <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">What drives the prediction</div>

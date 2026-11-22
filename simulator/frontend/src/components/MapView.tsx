@@ -93,6 +93,10 @@ type Props = {
   onPick: (p: LonLat) => void
   eventTrack?: LonLat[]
   pickingTrack?: boolean
+  pickingRoute?: boolean
+  tripStart?: LonLat | null
+  tripEnd?: LonLat | null
+  routeResult: SimResult | null
   /** Ranked places from the Equity & Relief Priorities panel, drawn while it is open. */
   relief?: { places: Place[]; highlighted: string | null; locate: { geoid: string; n: number } | null } | null
   /** False until the user picks a starting point: the route, start pin and moving dot stay hidden. */
@@ -116,7 +120,7 @@ function useDecodedImage(url?: string) {
   return decoded && decoded.url === url ? decoded.image : null
 }
 
-function MapView({ meta, roads, buildings, result, buildingMode, showWater, storm, onPick, eventTrack = NO_TRACK, pickingTrack = false, relief = null, showRoute = true }: Props) {
+function MapView({ meta, roads, buildings, result, buildingMode, showWater, storm, onPick, eventTrack = NO_TRACK, pickingTrack = false, relief = null, showRoute = true, pickingRoute, tripStart, tripEnd, routeResult }: Props) {
   const deckRef = useRef<DeckGLRef>(null)
   const surface = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Set<number>())
@@ -158,14 +162,16 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
     groundTap.current = null
     if (!tap || tap.id !== event.pointerId || pointers.current.size || Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 6) return
     const bounds = event.currentTarget.getBoundingClientRect()
-    const x = event.clientX - bounds.left
-    const y = event.clientY - bounds.top
     const renderer = deckRef.current?.deck
-    if (!renderer?.isInitialized) return
-    const viewport = renderer.getViewports({ x, y })[0]
+    if (!renderer?.isInitialized || !bounds.width || !bounds.height) return
+    const viewport = renderer.getViewports()[0]
     if (!viewport) return
-    // Route pins belong on the ground even when the user taps the roof of a building.
-    const [lon, lat] = viewport.unproject([x - viewport.x, y - viewport.y], { targetZ: 0 })
+    // The map can finish resizing one frame after a panel closes. Use proportional
+    // coordinates so picking still matches the canvas during that frame.
+    const x = (event.clientX - bounds.left) * viewport.width / bounds.width
+    const y = (event.clientY - bounds.top) * viewport.height / bounds.height
+    // Keep pins on the ground even when the tap lands on a building roof.
+    const [lon, lat] = viewport.unproject([x, y], { targetZ: 0 })
     if (Number.isFinite(lon) && Number.isFinite(lat)) onPick([lon, lat])
   }
 
@@ -176,10 +182,8 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
     const fit = () => {
       const { width, height } = map.getBoundingClientRect()
       const stage = map.closest('.sim-stage')
-      const panel = stage?.querySelector('.sim-panel-host')
-      const rail = width > 760 && panel ? panel.getBoundingClientRect().width + 12 : 0
       const top = (stage?.querySelector('.sim-summary')?.getBoundingClientRect().height ?? 0) + 36
-      setView(v => fitEventTrack(v, eventTrack, width, height, rail, top))
+      setView(v => fitEventTrack(v, eventTrack, width, height, 0, top))
     }
     const observer = new ResizeObserver(fit)
     observer.observe(map)
@@ -198,10 +202,8 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
     const points = (picked?.length ? picked : current.places).map((p) => p.tract.anchor)
     const { width, height } = map.getBoundingClientRect()
     const stage = map.closest('.sim-stage')
-    const panel = stage?.querySelector('.sim-panel-host')
-    const rail = width > 760 && panel ? panel.getBoundingClientRect().width + 12 : 0
     const top = (stage?.querySelector('.sim-summary')?.getBoundingClientRect().height ?? 0) + 48
-    setView((v) => fitEventTrack(v, points, width, height, rail, top))
+    setView((v) => fitEventTrack(v, points, width, height, 0, top))
   }, [reliefKey, locateKey])
   const [openingStage, setOpeningStage] = useState(0)
   const nextStage = useRef<number | undefined>(undefined)
@@ -303,7 +305,7 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
     return { water, roadLayer, bldLayer }
   }, [overlay, showWater, meta, roads, buildings, roadIdx, edgeDepth, closures, bldDepth, access, clearance, buildingMode, resultKey])
 
-  const route = showRoute ? result?.route : undefined
+  const route = showRoute ? (tripEnd ? routeResult?.trip : routeResult?.route) : undefined
   const cur = route?.current
   const selectedHospital = result?.route.hospital.id
   const hasTrack = eventTrack.length > 0
@@ -440,10 +442,12 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
 
   const markerLayers = useMemo(() => {
     const hospitals = meta.hospitals.map((h) => ({ ...h, active: h.id === selectedHospital }))
-    const dest = route?.dest
+    const dest = !tripEnd && showRoute ? routeResult?.route.dest : undefined
     const labels = [
       ...meta.neighborhoods.filter((n) => n.id !== dest?.id).map((n) => ({ text: n.name, pos: [n.lon, n.lat], kind: 'hood' })),
       ...hospitals.filter((h) => h.active).map((h) => ({ text: `${dest ? 'Destination' : 'Selected hospital'} · ${h.name}`, pos: [h.lon, h.lat], kind: 'hosp' })),
+      ...(tripEnd ? [{ text: 'Destination pin', pos: tripEnd, kind: 'dest' }] : []),
+      ...(tripEnd && tripStart ? [{ text: 'Start', pos: tripStart, kind: 'dest' }] : []),
       ...(dest ? [{ text: `Start · ${dest.name}`, pos: [dest.lon, dest.lat], kind: 'dest' }] : []),
     ]
     return [
@@ -492,7 +496,7 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
           ]
         : []),
     ]
-  }, [meta, route, selectedHospital])
+  }, [meta, tripEnd, tripStart, routeResult, showRoute, selectedHospital])
 
   const getTooltip = ({ layer, index }: PickingInfo) => {
     if (!layer || index < 0) return null
@@ -546,7 +550,7 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
       viewState={view}
       onViewStateChange={({ viewState }) => setView(viewState as ViewState)}
       controller={{ inertia: 250 }}
-      getCursor={({ isDragging }) => isDragging ? 'grabbing' : pickingTrack ? 'crosshair' : 'grab'}
+      getCursor={({ isDragging }) => isDragging ? 'grabbing' : (pickingTrack || pickingRoute) ? 'crosshair' : 'grab'}
       onInteractionStateChange={({ isDragging }) => { if (isDragging) groundTap.current = null }}
       onAfterRender={afterRender}
       layers={[

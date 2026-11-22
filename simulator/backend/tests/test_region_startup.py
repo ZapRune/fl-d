@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from fastapi import HTTPException
 from starlette.requests import Request
 
 from aquagrid import api
@@ -67,3 +68,33 @@ class RegionStartupTests(unittest.TestCase):
         prepare_geometry(self.path)
         compressed = api.buildings("example", request(accept_encoding="gzip"))
         self.assertEqual(gzip.decompress(Path(compressed.path).read_bytes()), self.path.read_bytes())
+
+
+    def test_missing_geometry_returns_service_unavailable(self):
+        self.path.unlink()
+        with self.assertRaises(HTTPException) as error:
+            api.buildings("example", request())
+        self.assertEqual(error.exception.status_code, 503)
+
+    def test_saturation_returns_retryable_error(self):
+        with api._simulation_slot(), api._simulation_slot(), api._simulation_slot():
+            with self.assertRaises(HTTPException) as error, api._simulation_slot():
+                self.fail("A saturated worker should refuse additional simulation work.")
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertEqual(error.exception.headers["Retry-After"], "1")
+        with api._simulation_slot():
+            pass
+
+    def test_catalog_does_not_mark_partial_region_ready(self):
+        example = api.REGIONS["example"]
+        example.id, example.name, example.bbox = "example", "Example", (-96, 29, -95, 30)
+        self.assertFalse(next(item for item in api.regions() if item["id"] == example.id)["built"])
+
+    def test_unknown_route_selection_never_reaches_inference(self):
+        region = SimpleNamespace(bbox=(-96, 29, -95, 30))
+        engine = SimpleNamespace(meta={"hospitals": [{"id": "hospital"}], "neighborhoods": [{"id": "place"}]})
+        with patch.object(api, "_region", return_value=region), patch.object(api, "_load_engine", return_value=engine):
+            for selection in ({"hospital": "place"}, {"dest": "hospital"}, {"dest_lonlat": (-93, 29)}):
+                with self.subTest(selection=selection), self.assertRaises(HTTPException) as error:
+                    api.simulate("example", api.SimRequest(**selection))
+                self.assertEqual(error.exception.status_code, 422)

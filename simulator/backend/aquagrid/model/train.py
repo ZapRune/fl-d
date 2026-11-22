@@ -19,7 +19,7 @@ import xgboost as xgb
 from ..config import DEFAULT_REGION, REGIONS
 from ..pipeline.features import STATIC_FEATURES
 from .featurize import FEATURE_LABELS, FEATURES, assemble, static_matrix
-from .simulator import PRESETS, add_label_noise, sample_scenarios, simulate
+from .simulator import MAX_DEPTH_M, PRESETS, add_label_noise, sample_scenarios, simulate
 
 
 def load_tables(out):
@@ -53,13 +53,17 @@ def main(region_id: str, n_scenarios: int, per_scenario: int, seed: int = 7):
     ])
 
     scen = sample_scenarios(n_scenarios, rng)
-    is_val = rng.random(len(scen)) < 0.15
+    if len(scen) < 10 or per_scenario < 1:
+        raise ValueError("Use at least ten storms and one sample per storm.")
+    order = rng.permutation(len(scen))
+    split_size = max(1, round(len(scen) * 0.15))
+    test, validation, training = np.split(order, [split_size, 2 * split_size])
     t0 = time.time()
-    Xtr, ytr = build_dataset(pool, scen[~is_val].reset_index(drop=True), per_scenario, w, rng, region.base_water_level)
-    Xva, yva = build_dataset(pool, scen[is_val].reset_index(drop=True), per_scenario, w, rng, region.base_water_level)
+    Xtr, ytr = build_dataset(pool, scen.iloc[training].reset_index(drop=True), per_scenario, w, rng, region.base_water_level)
+    Xva, yva = build_dataset(pool, scen.iloc[validation].reset_index(drop=True), per_scenario, w, rng, region.base_water_level)
     ytr_noisy = add_label_noise(ytr, rng)
-    print(f"dataset: train {len(ytr):,} rows ({(~is_val).sum()} storms), val {len(yva):,} rows "
-          f"({is_val.sum()} storms) in {time.time() - t0:.1f}s", flush=True)
+    print(f"dataset: train {len(ytr):,} rows ({len(training)} storms), val {len(yva):,} rows "
+          f"({len(validation)} storms) in {time.time() - t0:.1f}s", flush=True)
 
     dtr = xgb.DMatrix(Xtr, label=ytr_noisy, feature_names=FEATURES)
     dva = xgb.DMatrix(Xva, label=yva, feature_names=FEATURES)
@@ -72,12 +76,17 @@ def main(region_id: str, n_scenarios: int, per_scenario: int, seed: int = 7):
                         verbose_eval=100)
     train_s = time.time() - t0
 
-    pred = np.clip(booster.predict(dva, iteration_range=(0, booster.best_iteration + 1)), 0, None)
-    err = pred - yva
-    ss_res, ss_tot = float((err**2).sum()), float(((yva - yva.mean()) ** 2).sum())
+    # Free the training matrices before building the final evaluation set.
+    del dtr, dva, Xtr, Xva, ytr_noisy
+    baseline_depth = float(np.median(ytr))
+    Xtest, ytest = build_dataset(pool, scen.iloc[test].reset_index(drop=True), per_scenario, w, rng, region.base_water_level)
+    pred = np.clip(booster.inplace_predict(Xtest, iteration_range=(0, booster.best_iteration + 1)), 0, MAX_DEPTH_M)
+    del Xtest
+    err = pred - ytest
+    ss_res, ss_tot = float((err**2).sum()), float(((ytest - ytest.mean()) ** 2).sum())
 
     def cls_metrics(th):
-        t, p = yva > th, pred > th
+        t, p = ytest > th, pred > th
         tp, fp, fn = (t & p).sum(), (~t & p).sum(), (t & ~p).sum()
         prec, rec = tp / max(tp + fp, 1), tp / max(tp + fn, 1)
         return dict(threshold_m=th, accuracy=float((t == p).mean()), precision=float(prec), recall=float(rec),
@@ -98,7 +107,7 @@ def main(region_id: str, n_scenarios: int, per_scenario: int, seed: int = 7):
     for k, p in PRESETS.items():
         truth = simulate(fe, p["rain"], p["duration"], p["surge"], p["clog"], region.base_water_level)
         X = assemble(Se, p["rain"], p["duration"], p["surge"], p["clog"], region.base_water_level)
-        sur = np.clip(booster.inplace_predict(X, iteration_range=(0, booster.best_iteration + 1)), 0, None)
+        sur = np.clip(booster.inplace_predict(X, iteration_range=(0, booster.best_iteration + 1)), 0, MAX_DEPTH_M)
         preset_check[k] = dict(
             sim_pct_roads_15cm=round(100 * L[truth > 0.15].sum() / L.sum(), 1),
             ml_pct_roads_15cm=round(100 * L[sur > 0.15].sum() / L.sum(), 1),
@@ -109,10 +118,14 @@ def main(region_id: str, n_scenarios: int, per_scenario: int, seed: int = 7):
         target="water depth (m) at the lowest point of each road edge / building footprint / 17 m cell",
         teacher="process-based surge + drain-backflow + pluvial ponding simulator",
         n_train_rows=int(len(ytr)), n_val_rows=int(len(yva)),
-        n_train_storms=int((~is_val).sum()), n_val_storms=int(is_val.sum()),
+        n_train_storms=len(training), n_val_storms=len(validation),
+        evaluation=dict(
+            version="synthetic-storm-holdout-v2", n_test_storms=len(test), n_test_rows=len(ytest),
+            baseline="constant training median", baseline_mae_cm=round(100 * float(np.abs(ytest - baseline_depth).mean()), 2),
+        ),
         n_trees=int(booster.best_iteration + 1), max_depth=params["max_depth"],
         train_seconds=round(train_s, 1),
-        r2=round(1 - ss_res / ss_tot, 4), mae_cm=round(100 * float(np.abs(err).mean()), 2),
+        r2=round(1 - ss_res / ss_tot, 4) if ss_tot else None, mae_cm=round(100 * float(np.abs(err).mean()), 2),
         rmse_cm=round(100 * float(np.sqrt((err**2).mean())), 2),
         classification=[cls_metrics(0.15), cls_metrics(0.30)],
         importance=importance,

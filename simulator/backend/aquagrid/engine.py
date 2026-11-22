@@ -143,6 +143,9 @@ class RegionEngine:
                 assemble(self.static, rain, sc.duration, surge, sc.clog, self.region.base_water_level, out=self.X)
                 d = self.booster.inplace_predict(self.X, iteration_range=(0, self.n_trees))
                 d = np.asarray(d, dtype=np.float32)
+            if not np.isfinite(d).all():
+                raise FloatingPointError("The regional depth model returned non-finite values.")
+            np.clip(d, 0, MAX_DEPTH_M, out=d)
             d[d < 0.01] = 0
             a, b, c, e = self.splits
             res = (d[a:b], d[b:c], d[c:e])
@@ -175,9 +178,31 @@ class RegionEngine:
             self._dry_cache[key] = (w, self.router.access_times(src, w))
         return self._dry_cache[key]
 
+    def _compare_route(self, src, dst, weights, dry_weights, clearance):
+        current = self.router.route(src, dst, weights)
+        key = (src, dst, clearance)
+        with self._route_lock:
+            if key not in self._dry_routes:
+                self._dry_routes[key] = self.router.route(src, dst, dry_weights)
+            dry = self._dry_routes[key]
+            self._dry_routes.move_to_end(key)
+            if len(self._dry_routes) > 32:
+                self._dry_routes.popitem(last=False)
+        blocked = [self.router.geoms[i].tolist() for i in dry["edges"]
+                   if not np.isfinite(weights[i])] if dry else []
+        delay = current["time_s"] - dry["time_s"] if current and dry else None
+        if current is None:
+            status = "blocked"
+        elif blocked or (delay is not None and delay > dry["time_s"] * 0.05 + 15):
+            status = "detour"
+        else:
+            status = "clear"
+        return dict(status=status, current=_route_json(current), dry=_route_json(dry),
+                    blocked=blocked, delay_s=None if delay is None else round(delay, 1))
+
     # ------------------------------------------------------------------- main
     def simulate(self, rain, duration, surge, clog, vehicle="ambulance", hospital=None, dest=None,
-                 dest_lonlat=None, overlay=True, event=None):
+                 dest_lonlat=None, overlay=True, event=None, trip=None):
         t0 = time.perf_counter()
         sc = Scenario.make(rain, duration, surge, clog, event=event)
         de, db, dc = self.predict(sc)
@@ -196,28 +221,28 @@ class RegionEngine:
         w = edge_weights(self.router.base_time, de, clearance)
         w_dry, t_dry = self._dry(src, clearance)
         t_now = self.router.access_times(src, w)
-        route_now = self.router.route(src, dst, w)
-        rkey = (src, dst, clearance)
-        with self._route_lock:
-            if rkey not in self._dry_routes:
-                self._dry_routes[rkey] = self.router.route(src, dst, w_dry)
-            route_dry = self._dry_routes[rkey]
-            if _VERCEL_WORKER:
-                self._dry_routes.move_to_end(rkey)
-                if len(self._dry_routes) > 32:
-                    self._dry_routes.popitem(last=False)
+        route = self._compare_route(src, dst, w, w_dry, clearance)
+        route.update(
+            vehicle=vehicle,
+            clearance_m=clearance,
+            hospital={key: hosp[key] for key in ("id", "name", "lon", "lat")},
+            dest={key: dest_info[key] for key in ("id", "name", "lon", "lat")},
+        )
+        trip_route = None
+        if trip is not None:
+            start, start_snap = self.nearest_node(*trip["start"])
+            end, end_snap = self.nearest_node(*trip["end"])
+            trip_route = self._compare_route(start, end, w, w_dry, clearance)
+            trip_route.update(start=trip["start"], end=trip["end"],
+                              start_snap_m=round(start_snap, 1), end_snap_m=round(end_snap, 1))
         t_route = time.perf_counter() - t0 - t_pred
-
-        blocked = []
-        if route_dry:
-            blocked = [self.router.geoms[i].tolist() for i in route_dry["edges"] if not np.isfinite(w[i])]
-        status = "blocked" if route_now is None else ("detour" if blocked or (
-            route_dry and route_now["time_s"] > route_dry["time_s"] * 1.05 + 15) else "clear")
 
         # building access (minutes); 65535 = cut off from the hospital
         bt = t_now[self.bld_node]
         bt_dry = t_dry[self.bld_node]
         reach = np.isfinite(bt)
+        dry_reach = np.isfinite(bt_dry)
+        newly_cut_off = dry_reach & ~reach
         access = np.where(reach, np.clip(np.round(bt / 6.0), 0, 65000), 65535).astype(int)
 
         L = self.edge_len
@@ -243,22 +268,13 @@ class RegionEngine:
             max_depth_m=round(float(max(dc.max(initial=0), de.max(initial=0))), 2),
             access=dict(
                 cut_off=int((~reach).sum()),
-                over_15min=int((bt > 900).sum()),
+                over_15min=int((reach & (bt > 900)).sum()),
+                cut_off_dry=int((~dry_reach).sum()),
+                newly_cut_off=int(newly_cut_off.sum()),
                 median_min=round(float(np.median(bt[reach])) / 60, 1) if reach.any() else None,
-                median_min_dry=round(float(np.median(bt_dry[np.isfinite(bt_dry)])) / 60, 1),
+                median_min_dry=round(float(np.median(bt_dry[dry_reach])) / 60, 1) if dry_reach.any() else None,
             ),
             hotspots=self._hotspots(de, imp),
-        )
-        route = dict(
-            status=status,
-            vehicle=vehicle,
-            clearance_m=clearance,
-            hospital=dict(id=hosp["id"], name=hosp["name"], lon=hosp["lon"], lat=hosp["lat"]),
-            dest=dict(id=dest_info["id"], name=dest_info["name"], lon=dest_info["lon"], lat=dest_info["lat"]),
-            current=_route_json(route_now),
-            dry=_route_json(route_dry),
-            blocked=blocked,
-            delay_s=None if route_now is None or route_dry is None else round(route_now["time_s"] - route_dry["time_s"], 1),
         )
         out = dict(
             scenario=dict(rain=sc.rain, duration=sc.duration, surge=sc.surge, clog=sc.clog),
@@ -266,9 +282,16 @@ class RegionEngine:
             closed_edges_b64=base64.b64encode(np.packbits(imp, bitorder="little").tobytes()).decode("ascii"),
             buildings=np.round(db * 100).astype(int).tolist(),
             access=access.tolist(),
+            newly_cut_off_buildings_b64=base64.b64encode(
+                np.packbits(newly_cut_off, bitorder="little").tobytes()
+            ).decode("ascii"),
             stats=stats,
             route=route,
         )
+        if sc.rain > 200 or not 0.25 <= sc.duration <= 24 or sc.surge > 3:
+            out["warnings"] = ["One or more inputs fall outside the ranges used to sample training storms."]
+        if trip_route is not None:
+            out["trip"] = trip_route
         if sc.event:
             out["scenario"]["event"] = dict(kind=sc.event.kind, track=sc.event.track,
                                              radius_km=sc.event.radius_km, progress=sc.event.progress)

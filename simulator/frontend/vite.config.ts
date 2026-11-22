@@ -29,6 +29,7 @@ function prepareRuntimeAssets() {
       resolve(root, '../../apps/web/public/map', file),
       resolve(mapOut, file),
     )
+  copyFileSync(resolve(root, '../../apps/web/public/flud-logo.png'), resolve(mapOut, 'flud-logo.png'))
   const fontOut = resolve(root, 'public/fonts')
   mkdirSync(fontOut, { recursive: true })
   copyFileSync(

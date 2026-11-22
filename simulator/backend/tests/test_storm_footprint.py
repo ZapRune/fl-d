@@ -103,10 +103,22 @@ class SwathTests(unittest.TestCase):
                           dict(radius_km=0), dict(radius_km=float("inf")), dict(progress=1.1), dict(kind="tornado")]:
             with self.subTest(overrides=overrides), self.assertRaises(ValidationError):
                 api.SimRequest(event={**event, **overrides})
-        for coords in [[-96.001, 29], [-95.5, float("nan")]]:
+        with self.assertRaises(ValidationError):
+            api.SimRequest(event={**event, "track": [[-95.5, float("nan")]]})
+        for coords in [[-96.001, 29]]:
             with self.assertRaises(HTTPException) as error:
                 api._validate_event_bounds(api.SimRequest(event={**event, "track": [coords]}), region)
             self.assertEqual(error.exception.status_code, 422)
+
+    def test_trip_outside_region_rejected_before_loading_model(self):
+        region = next(iter(api.REGIONS.values()))
+        west, south, east, north = region.bbox
+        valid = ((west + east) / 2, (south + north) / 2)
+        with patch.object(api, "_region", return_value=region), self.assertRaises(HTTPException) as error:
+            api.simulate(region.id, api.SimRequest(trip={"start": valid, "end": (west - 0.01, south)}))
+        self.assertEqual(error.exception.status_code, 422)
+        with self.assertRaises(ValidationError):
+            api.SimRequest(trip={"start": valid})
 
 
 class RainDepth:
@@ -170,6 +182,46 @@ class EventRoutingTests(unittest.TestCase):
         self.assertEqual(miss["edges"], [0, 0, 0])
         self.assertEqual(miss["buildings"], [0, 0])
         self.assertNotEqual(hit["spatial"]["flow_paths"], miss["spatial"]["flow_paths"])
+
+    def test_demonstration_trip_uses_its_own_endpoints_and_preserves_hospital_access(self):
+        legacy = self.run_scenario(event=self.event)
+        start, end = self.xy(2, 8), self.xy(7, 4)
+        result = self.run_scenario(event=self.event, trip=dict(start=start, end=end))
+        self.assertEqual(result["route"], legacy["route"])
+        self.assertEqual(result["stats"]["access"], legacy["stats"]["access"])
+        self.assertEqual(result["access"], legacy["access"])
+        self.assertEqual(result["trip"]["start_snap_m"], 0)
+        self.assertEqual(result["trip"]["end_snap_m"], 0)
+        self.assertEqual(result["trip"]["current"]["n_edges"], 1)
+        np.testing.assert_allclose(result["trip"]["dry"]["coords"], [start, end], atol=1e-6, rtol=0)
+
+    def test_facility_cutoffs_distinguish_baseline_and_new_disconnection(self):
+        dry = np.array([0., np.inf, 10.])
+        storm = np.array([0., np.inf, np.inf])
+        self.engine.bld_node = np.array([1, 2])
+        with patch.object(self.engine.router, "access_times", side_effect=[dry, storm]):
+            result = self.run_scenario()
+        access = result["stats"]["access"]
+        self.assertEqual(base64.b64decode(result["newly_cut_off_buildings_b64"]), b"\x02")
+        self.assertEqual(access["cut_off"], 2)
+        self.assertEqual(access["cut_off_dry"], 1)
+        self.assertEqual(access["newly_cut_off"], 1)
+        self.assertEqual(access["over_15min"], 0)
+
+    def test_parallel_road_weights_match_access_and_trip(self):
+        xy = np.array([self.xy(2, 1), self.xy(2, 8), self.xy(7, 4)])
+        router = Router([0, 1, 1], [1, 0, 2], [50, 60, 20], [700, 700, 900],
+                        xy, [xy[[0, 1]], xy[[1, 0]], xy[[1, 2]]])
+        weights = np.array([np.inf, 60., 20.])
+        self.assertEqual(router.route(0, 2, weights)["time_s"], 80.)
+        self.assertEqual(router.access_times(0, weights)[2], 80.)
+        self.assertTrue(np.isinf(router.access_times(0, np.full(3, np.inf))[2]))
+
+    def test_trip_with_same_road_node_has_zero_distance(self):
+        point = self.xy(2, 8)
+        result = self.run_scenario(trip=dict(start=point, end=point))
+        self.assertEqual(result["trip"]["current"]["length_m"], 0)
+        self.assertEqual(result["trip"]["status"], "clear")
 
     def test_closure_bits_match_routing_even_if_depth_rounds_to_clearance(self):
         clearance = self.run_scenario(rain=0)["route"]["clearance_m"]

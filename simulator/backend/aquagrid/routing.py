@@ -1,7 +1,7 @@
 """Flood-aware emergency routing.
 
-* Point-to-point: NetworkX A* (haversine heuristic) on a MultiGraph whose edge weights are
-  re-computed per scenario. Edges deeper than the vehicle's safe wading depth are removed
+* Point-to-point: NetworkX A* (local distance heuristic) on a MultiGraph whose edge weights are
+  re-computed per scenario. Edges deeper than the vehicle’s modeled depth threshold are removed
   (weight None == infinite); shallower water slows traffic quadratically.
 * Network-wide access: SciPy single-source Dijkstra from the hospital gives response time to
   every intersection (and so to every building) in a few milliseconds.
@@ -53,9 +53,17 @@ class Router:
         self.G = nx.MultiGraph()
         self.G.add_nodes_from(range(self.n_nodes))
         self.G.add_edges_from((int(u), int(v), i, {"i": i}) for i, (u, v) in enumerate(zip(self.ui, self.vi)))
-        # fastest plausible speed for an admissible A* heuristic
-        self.vmax = float(np.max(self.length / np.maximum(self.base_time, 1e-6)))
         self._lat_k = math.cos(math.radians(float(np.mean(node_xy[:, 1]))))
+        # Use the same metric for the speed bound and the heuristic.
+        delta = (node_xy[self.ui] - node_xy[self.vi]) * [111_320 * self._lat_k, 111_320]
+        edge_speeds = np.linalg.norm(delta, axis=1) / np.maximum(self.base_time, 1e-6)
+        self.vmax = max(1.0, float(edge_speeds.max(initial=0.0)))
+        # Group parallel edges once, then reduce their scenario weights on each run.
+        a, b = np.minimum(self.ui, self.vi), np.maximum(self.ui, self.vi)
+        self._edge_order = np.lexsort((b, a))
+        a, b = a[self._edge_order], b[self._edge_order]
+        self._group_starts = np.flatnonzero(np.r_[True, (a[1:] != a[:-1]) | (b[1:] != b[:-1])][:len(a)])
+        self._graph_rows, self._graph_cols = a[self._group_starts], b[self._group_starts]
 
     # -- heuristics / weights -------------------------------------------------
     def _h(self, a, b):
@@ -103,14 +111,8 @@ class Router:
 
     def access_times(self, src: int, w: np.ndarray) -> np.ndarray:
         """Shortest travel time (s) from src to every node; inf if cut off."""
-        ok = np.isfinite(w)
-        u, v, ww = self.ui[ok], self.vi[ok], w[ok]
-        # keep only the fastest of any parallel edges (csr would otherwise sum duplicates)
-        a, b = np.minimum(u, v), np.maximum(u, v)
-        order = np.lexsort((ww, b, a))
-        a, b, ww = a[order], b[order], ww[order]
-        first = np.ones(len(a), dtype=bool)
-        first[1:] = (a[1:] != a[:-1]) | (b[1:] != b[:-1])
-        a, b, ww = a[first], b[first], ww[first]
-        M = csr_matrix((np.maximum(ww, 1e-6), (a, b)), shape=(self.n_nodes, self.n_nodes))
+        minimum = np.minimum.reduceat(w[self._edge_order], self._group_starts)
+        ok = np.isfinite(minimum)
+        M = csr_matrix((np.maximum(minimum[ok], 1e-6),
+                        (self._graph_rows[ok], self._graph_cols[ok])), shape=(self.n_nodes, self.n_nodes))
         return dijkstra(M, directed=False, indices=src)

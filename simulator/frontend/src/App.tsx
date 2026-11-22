@@ -14,6 +14,7 @@ import {
   type StormEvent,
 } from './lib/api'
 import { currentWeather } from './lib/currentWeather'
+import { decodeClosures } from './lib/floodMapGeometry'
 import { sameRouteSelection } from './lib/routeSelection'
 import ControlPanel from './components/ControlPanel'
 import EventControls, { insideRegion, MAX_TRACK_POINTS, type EventSettings } from './components/EventControls'
@@ -62,6 +63,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [controls, setControls] = useState<Scenario>(BASELINE)
   const [preset, setPreset] = useState<string | null>(null)
+  const useInitialWeather = useRef(true)
   const [weather, setWeather] = useState<Awaited<ReturnType<typeof currentWeather>> | null>(null)
   const [sound, setSound] = useState<AudioContext | null>(null)
   const stormSound = useRef<ReturnType<typeof createStormAudio> | null>(null)
@@ -104,6 +106,10 @@ export default function App() {
   const [playing, setPlaying] = useState<{ k: number; n: number; t: number } | null>(null)
   const playingRef = useRef(false)
   const [panel, setPanel] = useState<'storm' | 'impact' | 'layers' | 'relief' | null>(null)
+  const [routePick, setRoutePick] = useState<'start' | 'end' | null>(null)
+  const [tripEnd, setTripEnd] = useState<LonLat | null>(null)
+  const [pickMessage, setPickMessage] = useState('')
+  const [sideStorm, setSideStorm] = useState(true)
   const [relief, setRelief] = useState<ReliefData | null>(null)
   const [reliefBudget, setReliefBudget] = useState(1_000_000)
   const [reliefFocus, setReliefFocus] = useState<ReliefFocus>('need')
@@ -115,6 +121,8 @@ export default function App() {
   const returnFocus = useRef<HTMLElement | null>(null)
   const openPanel = (next: 'storm' | 'impact' | 'layers' | 'relief') => {
     setDraft(null)
+    setRoutePick(null)
+    if (next === 'impact') setSideStorm(true)
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     setPanel((current) => current === next ? null : next)
   }
@@ -177,8 +185,12 @@ export default function App() {
     setFrame(null)
     setEvent(null)
     setDraft(null)
+    setTripEnd(null)
+    setRoutePick(null)
     setEventSettings({ kind: 'flood', radius_km: 2 })
     setError(null)
+    setWeather(null)
+    useInitialWeather.current = true
     const failed = (error: unknown) => {
       if (!load.signal.aborted) {
         setError(String(error))
@@ -188,17 +200,22 @@ export default function App() {
     // Model inputs only depend on the small catalog entry. Start the scenario
     // while the region's much larger geometry and the 3D renderer are loading.
     api.meta(region, load.signal)
-      .then(async (meta) => {
+      .then((meta) => {
         const { latitude, longitude } = meta.region.view
-        const local = await currentWeather(latitude, longitude, load.signal).catch(() => null)
-        if (load.signal.aborted) return
-        setWeather(local)
         setPreset('current')
-        setControls({ ...BASELINE, rain: local?.rain ?? 0 })
+        setControls(BASELINE)
         setHospital(meta.hospitals[0]?.id ?? '')
         // No starting point until the user picks one, so no route is drawn on arrival.
         setDest({})
+        setTripEnd(null)
+        setRoutePick(null)
         setMeta(meta)
+        // Weather is optional: don't hold the map and controls behind an external API.
+        void currentWeather(latitude, longitude, load.signal).then((local) => {
+          if (load.signal.aborted) return
+          setWeather(local)
+          if (useInitialWeather.current) setControls({ ...BASELINE, rain: local.rain })
+        }).catch(() => {})
       })
       .catch(failed)
     setRelief(null)
@@ -257,10 +274,15 @@ export default function App() {
       })
   }, [])
 
-  const routeParams = useCallback(
-    () => ({ vehicle, hospital, ...(dest.lonlat ? { dest_lonlat: dest.lonlat } : { dest: dest.id }) }),
-    [vehicle, hospital, dest],
-  )
+  const namedStart = meta?.neighborhoods.find(point => point.id === dest.id)
+  const tripStart = useMemo<LonLat | null>(() => (
+    dest.lonlat ?? (namedStart ? [namedStart.lon, namedStart.lat] : null)
+  ), [dest.lonlat, namedStart])
+  const routeParams = useCallback(() => ({
+    vehicle, hospital,
+    ...(dest.lonlat ? { dest_lonlat: dest.lonlat } : { dest: dest.id }),
+    ...(tripEnd && tripStart ? { trip: { start: tripStart, end: tripEnd } } : {}),
+  }), [vehicle, hospital, dest, tripEnd, tripStart])
 
   useEffect(() => {
     if (!meta || meta.region.id !== region || playingRef.current) return
@@ -351,7 +373,8 @@ export default function App() {
     && deferredResult.buildings.length === buildingTracts.length ? deferredResult : null
   const reliefPlaces = useMemo(() => {
     if (!relief || !buildingTracts || !reliefResult) return null
-    const needs = tractNeeds(relief.tracts, buildingTracts, reliefResult.buildings, reliefResult.access)
+    const needs = tractNeeds(relief.tracts, buildingTracts, reliefResult.buildings, reliefResult.access,
+      decodeClosures(reliefResult.newly_cut_off_buildings_b64))
     return reliefPlan(relief.tracts, needs, reliefBudget, FOCUS_PRIORITY[reliefFocus]).places
   }, [relief, buildingTracts, reliefResult, reliefBudget, reliefFocus])
   const severity = Math.min(1, controls.rain / 170 + (controls.surge / 3) * 0.6) * 0.85
@@ -366,20 +389,43 @@ export default function App() {
       }
       return
     }
+    if (!meta || !insideRegion(lonlat, meta.region.bbox)) {
+      setPickMessage('Choose a point inside the study area.')
+      return
+    }
     stop()
+    setRoutePick(null)
+    setPickMessage('')
     setFrame(null)
-    setDest({ lonlat })
+    if (routePick === 'end') setTripEnd(lonlat)
+    else setDest({ lonlat })
     returnFocus.current = document.getElementById('show-impact')
-    setPanel('impact')
-  }, [stop, draft, meta])
+    // Wait for the map tap's compatibility click before placing controls under it.
+    if (compact) window.setTimeout(() => setPanel('impact'), 0)
+    else setPanel('impact')
+  }, [stop, draft, meta, routePick, compact])
+
+  useEffect(() => {
+    if (!routePick) return
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setRoutePick(null)
+      setPanel('impact')
+    }
+    window.addEventListener('keydown', cancel)
+    return () => window.removeEventListener('keydown', cancel)
+  }, [routePick])
 
   const onControls = (c: Scenario) => {
     stop()
+    useInitialWeather.current = false
     setPreset(null)
     setControls(c)
   }
   const onPreset = (key: string) => {
     stop()
+    useInitialWeather.current = key === 'current' && !weather
     if (key === 'current') {
       setPreset(key)
       setControls({ ...BASELINE, rain: weather?.rain ?? 0 })
@@ -414,26 +460,31 @@ export default function App() {
   const redirected = EARTH_ZONE_ID ? EARTH_ZONE_ID !== meta.region.id : Boolean(EARTH_ZONE && !overlaps(EARTH_BBOX, meta.region.bbox))
 
   const modal = compact && panel !== null
+  const docked = !compact && panel
+    ? panel === 'storm' ? 'dock-storm' : panel === 'impact' && sideStorm ? 'dock-both' : 'dock-right'
+    : ''
+  const impact = result?.stats
   return (
-    <div className={`sim-shell ${panel ? 'has-panel' : ''} ${EMBEDDED ? 'is-embedded' : ''}`}>
+    <div className={`sim-shell ${panel ? 'has-panel' : ''} ${docked} ${EMBEDDED ? 'is-embedded' : ''}`}>
       <a className="sim-skip" href="#sim-map">Skip to map</a>
       <header className="sim-header" inert={modal}>
-        {EMBEDDED ? <div className="sim-embed-title">{scenarioLabel}<span>{scenarioDetail}</span></div> : <div className="sim-brand"><Droplets size={25} aria-hidden="true" /><span>flŭd</span><span className="sim-product">Flood impact &amp; community resilience</span></div>}
+        {EMBEDDED ? <div className="sim-embed-title">{scenarioLabel}<span>{scenarioDetail}</span></div> : <div className="sim-brand"><img src={`${import.meta.env.BASE_URL}map/flud-logo.png`} width={28} height={28} alt="" /><span>flŭd</span><span className="sim-product">Flood impact &amp; community resilience</span></div>}
         <nav aria-label="Simulator panels">
           {typeof AudioContext !== 'undefined' && <button type="button" aria-label="Storm sound" title={sound ? 'Mute storm sound' : 'Enable storm sound'} aria-pressed={!!sound} onClick={toggleSound}>
             {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}<span>Sound {sound ? 'on' : 'off'}</span>
           </button>}
           <button type="button" id="show-guide" aria-label="Four-step guide" title={guide ? 'Hide the four-step guide' : 'Show the four-step guide'} aria-pressed={guide} onClick={() => showGuide(!guide)}><ListOrdered size={18} aria-hidden="true" /><span>Guide</span></button>
-          <button type="button" id="show-storm" aria-label="Storm controls" aria-expanded={panel === 'storm'} aria-controls="sim-panel" onClick={() => openPanel('storm')}><PanelLeftOpen size={18} aria-hidden="true" /><span>Storm controls</span></button>
-          <button type="button" id="show-impact" aria-label="Impact and routing" aria-expanded={panel === 'impact'} aria-controls="sim-panel" onClick={() => openPanel('impact')}><PanelRightOpen size={18} aria-hidden="true" /><span>Impact & routing</span></button>
-          <button type="button" aria-label="Map layers" aria-expanded={panel === 'layers'} aria-controls="sim-panel" onClick={() => openPanel('layers')}><Layers3 size={18} aria-hidden="true" /><span>Map layers</span></button>
-          {relief && <button type="button" id="show-relief" aria-label="Equity and Relief Priorities" aria-expanded={panel === 'relief'} aria-controls="sim-panel" onClick={() => openPanel('relief')}><HandCoins size={18} aria-hidden="true" /><span>Relief priorities</span></button>}
+          <button type="button" id="show-storm" aria-label="Storm controls" aria-expanded={panel === 'storm'} aria-controls="sim-panel" onClick={() => openPanel('storm')}><PanelLeftOpen size={18} aria-hidden="true" /><span>Storm<span className="sim-nav-wide"> controls</span></span></button>
+          <button type="button" id="show-impact" aria-label="Impact and routing" aria-expanded={panel === 'impact'} aria-controls="sim-panel" onClick={() => openPanel('impact')}><PanelRightOpen size={18} aria-hidden="true" /><span>Impact<span className="sim-nav-wide"> &amp; routing</span></span></button>
+          <button type="button" aria-label="Map layers" aria-expanded={panel === 'layers'} aria-controls="sim-panel" onClick={() => openPanel('layers')}><Layers3 size={18} aria-hidden="true" /><span><span className="sim-nav-wide">Map </span>Layers</span></button>
+          {relief && <button type="button" id="show-relief" aria-label="Equity and Relief Priorities" aria-expanded={panel === 'relief'} aria-controls="sim-panel" onClick={() => openPanel('relief')}><HandCoins size={18} aria-hidden="true" /><span>Relief<span className="sim-nav-wide"> priorities</span></span></button>}
         </nav>
       </header>
       <main className="sim-stage">
         <div id="sim-map" className="sim-map" tabIndex={-1} aria-label="Houston scenario map. Click to choose a starting point, or use the starting point selector in Impact and routing." inert={modal}>
           {scene ? <>
-            <scene.MapView key={meta.region.id} meta={meta} roads={scene.roads} buildings={scene.buildings} result={deferredResult} buildingMode={buildingMode} showWater={showWater} storm={event ? 0 : mapSeverity} onPick={onPick} eventTrack={draft ?? event?.track} pickingTrack={draft !== null} showRoute={Boolean(dest.id || dest.lonlat)}
+            <scene.MapView key={meta.region.id} meta={meta} roads={scene.roads} buildings={scene.buildings} result={deferredResult} buildingMode={buildingMode} showWater={showWater} storm={event ? 0 : mapSeverity} onPick={onPick} eventTrack={draft ?? event?.track} pickingTrack={draft !== null} showRoute={Boolean(dest.id || dest.lonlat) && (!tripEnd || Boolean(result?.trip))}
+              routeResult={result} tripStart={tripStart} tripEnd={tripEnd} pickingRoute={routePick !== null}
               relief={panel === 'relief' && reliefPlaces ? { places: reliefPlaces, highlighted: reliefHighlight, locate: reliefLocate } : null} />
             {!event && <RainOverlay rain={controls.rain} wind={wind} severity={severity} />}
           </> : <p className="sim-map-loading" role="status"><LoaderCircle size={16} aria-hidden="true" className="sim-spinner" />Loading roads and buildings…</p>}
@@ -449,7 +500,12 @@ export default function App() {
             <p className="sim-zone-note">No prepared dataset for “{EARTH_ZONE ?? EARTH_ZONE_ID}”. Showing {meta.region.name}.</p>
           )}
         </div>}
-        {guide && <WorkflowGuide hidden={panel !== null || draft !== null} onStep={onGuideStep} onDismiss={() => showGuide(false)}
+        {impact && !modal && !routePick && !draft && <dl className="sim-impact-strip" aria-label="Modeled scenario impact">
+          <div><dt>Roads flagged</dt><dd>{impact.roads.flooded_km.toLocaleString()} <span>km</span></dd></div>
+          <div><dt>Buildings exposed</dt><dd>{impact.buildings.flooded.toLocaleString()}</dd></div>
+          <div><dt>{impact.access.newly_cut_off === undefined ? "Cut off from facility" : "Newly cut off"}</dt><dd>{(impact.access.newly_cut_off ?? impact.access.cut_off).toLocaleString()}</dd></div>
+        </dl>}
+        {guide && <WorkflowGuide hidden={panel !== null || draft !== null || routePick !== null} onStep={onGuideStep} onDismiss={() => showGuide(false)}
           unavailable={{
             ...(controls.rain === 0 && controls.surge === 0 && { simulate: 'Choose a storm in step 1 first.' }),
             ...(!relief && { relief: 'Census tract data isn’t available for this area.' }),
@@ -461,12 +517,25 @@ export default function App() {
           <button className="storm-apply" type="button" disabled={!draft.length} onClick={() => finishDrawing(true)}>Apply path</button>
         </div>}
         {modal && <button type="button" className="sim-backdrop" tabIndex={-1} aria-label="Close simulator panel" onClick={closePanel} />}
+        {routePick && <div className="route-pick-hint" role="status">{pickMessage || (routePick === 'start' ? 'Select a starting point on the map.' : 'Select a destination on the map.')} <button type="button" onClick={() => { setRoutePick(null); setPanel('impact') }}>Cancel</button></div>}
+        {!compact && panel === 'impact' && sideStorm && <div className="sim-storm-side" aria-label="Storm controls">
+          <ControlPanel weatherLabel={weather?.label ?? 'Weather unavailable'} meta={meta} controls={controls} preset={preset} onControls={onControls} onPreset={onPreset} playing={playing} onPlay={play} onStop={stopAndRestore} onCollapse={() => setSideStorm(false)} embedded={EMBEDDED}
+            eventControls={<EventControls meta={meta} event={event} settings={eventSettings} onTrack={applyTrack}
+              onSettings={settings => { setEventSettings(settings); if (event) { stop(); setFrame(null); setEvent({ ...event, ...settings }) } }}
+              onDraw={() => { if (playingRef.current) stopAndRestore(); setPanel(null); setDrawMessage(''); setDraft([]); requestAnimationFrame(() => document.getElementById('sim-map')?.focus()) }} />} />
+        </div>}
         {panel && <div ref={panelRef} id="sim-panel" className="sim-panel-host" role={compact ? 'dialog' : 'region'} aria-modal={compact || undefined} aria-labelledby={`${panel}-panel-title`}>
           {panel === 'storm' && <ControlPanel weatherLabel={weather?.label ?? 'Weather unavailable'} meta={meta} controls={controls} preset={preset} onControls={onControls} onPreset={onPreset} playing={playing} onPlay={play} onStop={stopAndRestore} onCollapse={closePanel} embedded={EMBEDDED}
             eventControls={<EventControls meta={meta} event={event} settings={eventSettings} onTrack={applyTrack}
               onSettings={settings => { setEventSettings(settings); if (event) { stop(); setFrame(null); setEvent({ ...event, ...settings }) } }}
               onDraw={() => { if (playingRef.current) stopAndRestore(); setPanel(null); setDrawMessage(''); setDraft([]); requestAnimationFrame(() => document.getElementById('sim-map')?.focus()) }} />} />}
-          {panel === 'impact' && <ImpactPanel meta={meta} result={result} request={playing ? null : frame?.request ?? null} vehicle={vehicle} onVehicle={v => { if (v !== vehicle) { stop(); setFrame(null); setVehicle(v) } }} hospital={hospital} onHospital={(id) => { stop(); setFrame(null); setHospital(id) }} dest={dest} onDest={(id) => { if (id !== 'custom') { stop(); setFrame(null); setDest({ id }) } }} onCollapse={closePanel} />}
+          {panel === 'impact' && <ImpactPanel meta={meta} result={result} request={playing ? null : frame?.request ?? null} vehicle={vehicle} onVehicle={v => { if (v !== vehicle) { stop(); setFrame(null); setVehicle(v) } }} hospital={hospital} onHospital={(id) => { stop(); setFrame(null); setHospital(id) }} dest={dest} onDest={(id) => { if (id !== 'custom') { stop(); setFrame(null); setDest({ id }) } }} tripEnd={tripEnd} onTripEnd={point => { stop(); setFrame(null); setTripEnd(point) }}
+            onPickEndpoint={endpoint => {
+              setRoutePick(endpoint)
+              setPickMessage('')
+              setPanel(null)
+              requestAnimationFrame(() => document.getElementById('sim-map')?.focus())
+            }} onCollapse={closePanel} />}
           {panel === 'relief' && <ReliefPanel data={relief} places={reliefPlaces} budget={reliefBudget} onBudget={setReliefBudget}
             focus={reliefFocus} onFocus={setReliefFocus} highlighted={reliefHighlight} onHighlight={setReliefHighlight}
             onLocate={(geoid) => setReliefLocate((current) => ({ geoid, n: (current?.n ?? 0) + 1 }))} onCollapse={closePanel} />}
@@ -483,7 +552,7 @@ export default function App() {
           <div><strong>{playing ? `T+${playing.t.toFixed(1)} h` : `${controls.duration} h scenario`}</strong><span>{controls.rain.toFixed(0)} mm/h rain · +{controls.surge.toFixed(2)} m surge</span></div>
           <progress aria-label="Scenario buildup progress" max={PLAY_FRAMES} value={playing?.k ?? (result ? PLAY_FRAMES : 0)} />
         </div>
-        <p>Model scenario estimates<br /><span>Not operational navigation</span></p>
+        <p>Exploratory model estimate<br /><span>Not a forecast or operational navigation</span></p>
       </footer>
     </div>
   )

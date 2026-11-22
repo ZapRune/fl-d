@@ -97,12 +97,12 @@ for (let run = 0; run < Number(process.env.QA_TRIALS ?? 3); run++) {
       }
     }, { intro, click })
     await frame.getByRole('button', { name: 'Storm controls', exact: true }).click()
-    const storm = frame.getByRole('button', { name: /memorial/i }).first()
+    const storm = frame.getByRole('button', { name: 'Severe rainfall scenario', exact: true })
     const selected = page.waitForResponse(r => r.url().endsWith('/simulate') && r.request().method() === 'POST')
     await storm.click()
     await selected
     await frame.getByRole('button', { name: 'Collapse storm controls' }).click()
-    await frame.getByRole('button', { name: 'Play storm hour by hour' }).click()
+    await frame.getByRole('button', { name: 'Animate scenario', exact: true }).click()
     const playback = await frame.evaluate(async () => {
       const frames = []
       const start = performance.now()

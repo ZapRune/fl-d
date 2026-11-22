@@ -93,7 +93,7 @@ type Props = {
   onPick: (p: LonLat) => void
   eventTrack?: LonLat[]
   pickingTrack?: boolean
-  /** Funded places from the Relief money panel, drawn while it is open. */
+  /** Ranked places from the Equity & Relief Priorities panel, drawn while it is open. */
   relief?: { places: Place[]; highlighted: string | null; locate: { geoid: string; n: number } | null } | null
 }
 
@@ -523,7 +523,7 @@ function MapView({ meta, roads, buildings, result, buildingMode, showWater, stor
     if (layer.id === 'buildings') {
       const d = (bldDepth?.[index] ?? 0) / 100
       const a = access?.[index]
-      const acc = a === undefined ? '' : a === CUT_OFF ? 'Cut off from ER' : `ER response ${(a / 10).toFixed(1)} min`
+      const acc = a === undefined ? '' : a === CUT_OFF ? 'No modeled route to selected hospital' : `ER response ${(a / 10).toFixed(1)} min`
       return {
         text: [
           buildings.name[index] ?? buildings.kind[index].replace(/_/g, ' '),

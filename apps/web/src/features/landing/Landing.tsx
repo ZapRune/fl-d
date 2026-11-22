@@ -159,7 +159,7 @@ export default function Landing({ chooseArea = false, onCloseChooser }: { choose
     </div>
     <main className="landing-story">
       <section className="landing-chapter landing-intro">
-        <div className="landing-copy"><h1>A changing city.<br />A clearer picture.</h1><p>Explore how storms could reshape Houston’s roads, buildings and access to care.</p><button className="landing-primary" onClick={beginJourney}>Explore Houston <Icon name="down" size={18} /></button></div>
+        <div className="landing-copy"><h1>A changing city.<br />A clearer picture.</h1><p>See how flooding disrupts a community, who loses access to essential services, and where relief could be prioritized.</p><button className="landing-primary" onClick={beginJourney}>Explore Houston <Icon name="down" size={18} /></button></div>
         <a className="landing-scroll" href="#landing-earth" onClick={e => { e.preventDefault(); beginJourney(); }}>Scroll to see the bigger picture <Icon name="down" size={18} /></a>
       </section>
       <section id="landing-earth" className="landing-chapter landing-orbit"><div className="landing-copy"><h2>One planet.<br />Our corner of it.</h2><p>Start with Earth. Follow the Gulf Coast to the bayous, neighborhoods and streets of Houston.</p><button className="landing-text-link" onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })}>Continue down to Houston <Icon name="down" size={15} /></button></div></section>

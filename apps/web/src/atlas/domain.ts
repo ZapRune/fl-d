@@ -51,7 +51,7 @@ export const ASSUMPTION_LIMITS = {
 export const ILLUSTRATIVE_STORM_RADIUS_KM = 6;
 export const ROAD_SOURCE_ID = "earthlab:houston-schematic-roads-v1";
 export const ROAD_PROVENANCE =
-  "EarthLab original CC0 schematic road fixture. Geometry and topology are invented for interaction; not a street survey, official road inventory, or road-condition feed.";
+  "flŭd original CC0 schematic road fixture. Geometry and topology are invented for interaction; not a street survey, official road inventory, or road-condition feed.";
 export const GEOMETRY_ASSUMPTIONS =
   "Geometric intersection with a drawn circle only. Flood radius grows linearly from 35% to 100% across the timeline; the hurricane marker has an arbitrary 6 km display footprint. Intensity and rainfall are display assumptions, not inputs to flood physics, road safety, or outage inference.";
 export const CONNECTIVITY_ASSUMPTIONS =

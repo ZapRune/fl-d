@@ -32,7 +32,7 @@ try {
     await click(page.getByRole('navigation', { name: 'Houston simulation areas' }).locator(`a[href="#/zone/${zone}"]`))
     const frame = page.frameLocator('.sim iframe')
     await click(frame.getByRole('button', { name: 'Storm controls', exact: true }))
-    await click(frame.getByRole('button', { name: '100-Yr NOAA Atlas', exact: true }))
+    await click(frame.getByRole('button', { name: 'High-return-period stress test (illustrative)', exact: true }))
     await click(frame.locator('.storm-event summary'))
     const origin = frame.getByLabel('Storm origin')
     await origin.selectOption({ index: 1 })

@@ -1,0 +1,30 @@
+.sim-guide {
+  position: absolute; z-index: 4; top: 12px; right: 12px; width: 300px; max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px); overflow-y: auto; background: var(--sim-panel); border: 1px solid var(--sim-rule);
+  border-left: 2px solid #729ab9;
+}
+.sim-guide[hidden] { display: none; }
+.sim-guide header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 14px; border-bottom: 1px solid var(--sim-rule); }
+.sim-guide h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--sim-paper); }
+.sim-guide header button { display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--sim-dim); }
+.sim-guide header button:hover { color: var(--sim-paper); background: var(--sim-raised); }
+.sim-guide ol { list-style: none; margin: 0; padding: 0; }
+.sim-guide li + li { border-top: 1px solid #3e506266; }
+.sim-guide li button {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; width: 100%;
+  padding: 10px 14px; border: 0; background: transparent; color: inherit; text-align: left;
+}
+.sim-guide li button:hover:not(:disabled) { background: var(--sim-raised); }
+.sim-guide li button:disabled { cursor: not-allowed; opacity: 1; }
+.sim-guide li button:disabled :is(strong, .sim-guide-n) { opacity: 0.55; }
+.sim-guide-n {
+  display: grid; place-items: center; width: 22px; height: 22px; margin-top: 1px; border: 1px solid #729ab9; border-radius: 50%;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--sim-amber);
+}
+.sim-guide strong { display: block; font-size: 13px; font-weight: 600; color: var(--sim-paper); }
+.sim-guide small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.35; color: var(--sim-dim); }
+@media (max-width: 760px) {
+  .sim-guide { top: 100px; left: 12px; right: 12px; width: auto; max-height: calc(100% - 164px); }
+  .is-embedded .sim-guide { top: 12px; }
+  .sim-guide li button { padding: 8px 12px; }
+}

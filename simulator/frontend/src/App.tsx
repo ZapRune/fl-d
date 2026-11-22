@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { Volume2, VolumeX, Droplets, HandCoins, Layers3, LoaderCircle, PanelLeftOpen, PanelRightOpen, Play, Square } from 'lucide-react'
+import { Volume2, VolumeX, Droplets, HandCoins, Layers3, ListOrdered, LoaderCircle, PanelLeftOpen, PanelRightOpen, Play, Square } from 'lucide-react'
 import {
   api,
   chooseRegion,
@@ -23,6 +23,7 @@ import ReliefPanel, { FOCUS_PRIORITY, type ReliefFocus } from './components/Reli
 import { assignBuildings, reliefPlan, tractNeeds, type ReliefData } from './lib/relief'
 import { createStormAudio } from './lib/stormAudio'
 import RainOverlay from './components/RainOverlay'
+import WorkflowGuide, { type GuideStep } from './components/WorkflowGuide'
 
 type Dest = { id?: string; lonlat?: LonLat }
 type Scene = {
@@ -35,6 +36,11 @@ const PLAY_FRAMES = 24
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const smooth = (x: number) => x * x * (3 - 2 * x)
+
+const GUIDE_KEY = 'flud.guide'
+function storeGuide(open: boolean) {
+  try { if (open) localStorage.removeItem(GUIDE_KEY); else localStorage.setItem(GUIDE_KEY, 'hidden') } catch { /* storage unavailable */ }
+}
 
 /** Running inside EarthLab's simulator host (an iframe). */
 const EMBEDDED = window.self !== window.top
@@ -104,6 +110,7 @@ export default function App() {
   const [reliefHighlight, setReliefHighlight] = useState<string | null>(null)
   const [reliefLocate, setReliefLocate] = useState<{ geoid: string; n: number } | null>(null)
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 760px)').matches)
+  const [guide, setGuide] = useState(() => { try { return localStorage.getItem(GUIDE_KEY) !== 'hidden' } catch { return true } })
   const panelRef = useRef<HTMLDivElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
   const openPanel = (next: 'storm' | 'impact' | 'layers' | 'relief') => {
@@ -196,7 +203,7 @@ export default function App() {
     setRelief(null)
     setReliefHighlight(null)
     setReliefLocate(null)
-    // Census tracts for the Relief money panel; regions without a file simply hide the panel.
+    // Census tracts for the Equity & Relief Priorities panel; regions without a file simply hide the panel.
     // BASE_URL keeps this working when the simulator is hosted under a sub-path (e.g. /simulator/ on Vercel).
     fetch(`${import.meta.env.BASE_URL}relief/${region}.json`, { signal: load.signal })
       .then((r) => (r.ok ? (r.json() as Promise<ReliefData>) : null))
@@ -382,6 +389,19 @@ export default function App() {
     setControls({ rain: p.rain, duration: p.duration, surge: p.surge, clog: p.clog })
   }
 
+  const showGuide = (open: boolean) => {
+    setGuide(open)
+    storeGuide(open)
+    if (open) setPanel(null)
+    else requestAnimationFrame(() => document.getElementById('show-guide')?.focus())
+  }
+  const onGuideStep = (step: GuideStep) => {
+    if (step === 'storm') openPanel('storm')
+    else if (step === 'simulate') void play()
+    else if (step === 'access') openPanel('impact')
+    else openPanel('relief')
+  }
+
   if (!meta || meta.region.id !== region || (error && !scene)) {
     return <Splash error={error ?? undefined} name={regions.find((r) => r.id === region)?.name} />
   }
@@ -397,15 +417,16 @@ export default function App() {
     <div className={`sim-shell ${panel ? 'has-panel' : ''} ${EMBEDDED ? 'is-embedded' : ''}`}>
       <a className="sim-skip" href="#sim-map">Skip to map</a>
       <header className="sim-header" inert={modal}>
-        {EMBEDDED ? <div className="sim-embed-title">{scenarioLabel}<span>{scenarioDetail}</span></div> : <div className="sim-brand"><Droplets size={25} aria-hidden="true" /><span>flŭd</span><span className="sim-product">Houston simulator</span></div>}
+        {EMBEDDED ? <div className="sim-embed-title">{scenarioLabel}<span>{scenarioDetail}</span></div> : <div className="sim-brand"><Droplets size={25} aria-hidden="true" /><span>flŭd</span><span className="sim-product">Flood impact &amp; community resilience</span></div>}
         <nav aria-label="Simulator panels">
           {typeof AudioContext !== 'undefined' && <button type="button" aria-label="Storm sound" title={sound ? 'Mute storm sound' : 'Enable storm sound'} aria-pressed={!!sound} onClick={toggleSound}>
             {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}<span>Sound {sound ? 'on' : 'off'}</span>
           </button>}
+          <button type="button" id="show-guide" aria-label="Four-step guide" title={guide ? 'Hide the four-step guide' : 'Show the four-step guide'} aria-pressed={guide} onClick={() => showGuide(!guide)}><ListOrdered size={18} aria-hidden="true" /><span>Guide</span></button>
           <button type="button" id="show-storm" aria-label="Storm controls" aria-expanded={panel === 'storm'} aria-controls="sim-panel" onClick={() => openPanel('storm')}><PanelLeftOpen size={18} aria-hidden="true" /><span>Storm controls</span></button>
           <button type="button" id="show-impact" aria-label="Impact and routing" aria-expanded={panel === 'impact'} aria-controls="sim-panel" onClick={() => openPanel('impact')}><PanelRightOpen size={18} aria-hidden="true" /><span>Impact & routing</span></button>
           <button type="button" aria-label="Map layers" aria-expanded={panel === 'layers'} aria-controls="sim-panel" onClick={() => openPanel('layers')}><Layers3 size={18} aria-hidden="true" /><span>Map layers</span></button>
-          {relief && <button type="button" id="show-relief" aria-label="Relief money" aria-expanded={panel === 'relief'} aria-controls="sim-panel" onClick={() => openPanel('relief')}><HandCoins size={18} aria-hidden="true" /><span>Relief money</span></button>}
+          {relief && <button type="button" id="show-relief" aria-label="Equity and Relief Priorities" aria-expanded={panel === 'relief'} aria-controls="sim-panel" onClick={() => openPanel('relief')}><HandCoins size={18} aria-hidden="true" /><span>Relief priorities</span></button>}
         </nav>
       </header>
       <main className="sim-stage">
@@ -427,6 +448,11 @@ export default function App() {
             <p className="sim-zone-note">No prepared dataset for “{EARTH_ZONE ?? EARTH_ZONE_ID}”. Showing {meta.region.name}.</p>
           )}
         </div>}
+        {guide && <WorkflowGuide hidden={panel !== null || draft !== null} onStep={onGuideStep} onDismiss={() => showGuide(false)}
+          unavailable={{
+            ...(controls.rain === 0 && controls.surge === 0 && { simulate: 'Choose a storm in step 1 first.' }),
+            ...(!relief && { relief: 'Census tract data isn’t available for this area.' }),
+          }} />}
         {draft !== null && <div className="storm-draw" aria-label="Draw storm path">
           <p role="status">{drawMessage || (draft.length === 0 ? 'Tap the map to place the storm origin.' : draft.length === MAX_TRACK_POINTS ? 'Path complete. Apply it to run the storm.' : `${draft.length} ${draft.length === 1 ? 'point' : 'points'} placed. Tap to extend the path.`)}</p>
           <button type="button" disabled={!draft.length} onClick={() => { setDraft(draft.slice(0, -1)); setDrawMessage('') }}>Undo point</button>
@@ -448,13 +474,13 @@ export default function App() {
         {error && <div className="sim-error" role="alert">{error}</div>}
       </main>
       <footer className="sim-transport" inert={modal}>
-        <button type="button" className="sim-play" onClick={playing ? stopAndRestore : play} disabled={draft !== null || (!playing && controls.rain === 0 && controls.surge === 0)} aria-label={playing ? 'Stop storm playback' : 'Play storm hour by hour'}>
+        <button type="button" className="sim-play" onClick={playing ? stopAndRestore : play} disabled={draft !== null || (!playing && controls.rain === 0 && controls.surge === 0)} aria-label={playing ? 'Stop scenario animation' : 'Animate scenario'}>
           {playing ? <Square size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
-          <span>{playing ? 'Stop' : 'Play storm'}</span>
+          <span>{playing ? 'Stop' : 'Animate'}</span>
         </button>
         <div className="sim-time">
           <div><strong>{playing ? `T+${playing.t.toFixed(1)} h` : `${controls.duration} h scenario`}</strong><span>{controls.rain.toFixed(0)} mm/h rain · +{controls.surge.toFixed(2)} m surge</span></div>
-          <progress aria-label="Storm playback progress" max={PLAY_FRAMES} value={playing?.k ?? (result ? PLAY_FRAMES : 0)} />
+          <progress aria-label="Scenario buildup progress" max={PLAY_FRAMES} value={playing?.k ?? (result ? PLAY_FRAMES : 0)} />
         </div>
         <p>Model scenario estimates<br /><span>Not operational navigation</span></p>
       </footer>
@@ -468,7 +494,7 @@ function Splash({ error, name }: { error?: string; name?: string }) {
     <main className="sim-splash">
       <div className="sim-splash-content">
         <Droplets size={32} aria-hidden="true" />
-        <span>flŭd · Houston simulator</span>
+        <span>flŭd · Flood impact &amp; community resilience</span>
         <h1>{error ? missingData ? 'No prepared Houston dataset' : 'Simulation service unavailable' : 'Opening the Houston scene'}</h1>
         {error ? <>
           <p>{missingData ? 'The API is connected, but no simulation region has been built. Prepare or supply a Houston dataset, then retry.' : 'The simulator could not load its API or region data. Check the local service, then retry.'}</p>

@@ -408,7 +408,7 @@ export default function EarthView({
       <header className="mast">
         <div className="brand">
           <Icon name="atlas" size={34} />
-          <b>EarthLab</b>
+          <b>flŭd</b>
         </div>
         <span className="brand-divider" />
         <h1 className="product-title">Earth overview</h1>
@@ -434,7 +434,7 @@ export default function EarthView({
           </span>
           <button onClick={onOpenSimulator}>
             <Icon name="layers" size={15} />
-            Open EarthLab
+            Choose an area
           </button>
         </div>
       </header>

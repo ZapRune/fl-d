@@ -171,6 +171,10 @@ for (const id of zones) {
       })
       await frame.locator('.sim-map').evaluate(() => document.fonts.ready)
       await screenshot(page, `${label}-opening`)
+      step('workflow-guide')
+      await frame.getByRole('heading', { name: 'Explore a flood in four steps', exact: true }).waitFor()
+      await tap(page, frame.getByRole('button', { name: 'Hide the four-step guide', exact: true }), mobile)
+      await frame.getByRole('heading', { name: 'Explore a flood in four steps', exact: true }).waitFor({ state: 'detached' })
       step('storm-preset')
       await tap(page, frame.getByRole('button', { name: 'Storm controls', exact: true }), mobile)
       const beforePreset = responses.length
@@ -179,11 +183,11 @@ for (const id of zones) {
       await tap(page, frame.getByRole('button', { name: 'Collapse storm controls', exact: true }), mobile)
       const beforePlay = responses.length
       step('playback-model-changes')
-      await tap(page, frame.getByRole('button', { name: 'Play storm hour by hour', exact: true }), mobile)
+      await tap(page, frame.getByRole('button', { name: 'Animate scenario', exact: true }), mobile)
       await until(() => responses.slice(beforePlay).length >= 3 && new Set(responses.slice(beforePlay).map(result => result.fingerprint)).size > 1, 'Playback did not change model outputs', 90_000)
       const elapsed = await frame.locator('.sim-time strong').innerText()
       assert.match(elapsed, /^T\+/)
-      if (await frame.getByRole('button', { name: 'Stop storm playback', exact: true }).count()) await tap(page, frame.getByRole('button', { name: 'Stop storm playback', exact: true }), mobile)
+      if (await frame.getByRole('button', { name: 'Stop scenario animation', exact: true }).count()) await tap(page, frame.getByRole('button', { name: 'Stop scenario animation', exact: true }), mobile)
       await sleep(300)
       report.playback = { preset: stormKey, elapsed, frames: responses.slice(beforePlay).map(result => ({ scenario: result.scenario, fingerprint: result.fingerprint, floodedRoadKm: result.stats.roads.flooded_km, floodedBuildings: result.stats.buildings.flooded })) }
       step('reviewed-storm-and-route-inputs')
